@@ -1,0 +1,1942 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FastAPI",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "https://dev.crowddrop.aidobotics.ai/app"
+    }
+  ],
+  "paths": {
+    "/healthcheck/mongo": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Healthcheck Mongo",
+        "operationId": "healthcheck_mongo_healthcheck_mongo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthcheck/minio": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Healthcheck Minio",
+        "operationId": "healthcheck_minio_healthcheck_minio_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthcheck/redis": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Healthcheck Redis",
+        "operationId": "healthcheck_redis_healthcheck_redis_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthcheck/firebase": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Healthcheck Firebase",
+        "operationId": "healthcheck_firebase_healthcheck_firebase_get",
+        "parameters": [
+          {
+            "name": "device_token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Device token to send test notification",
+              "title": "Device Token"
+            },
+            "description": "Device token to send test notification"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthcheck/protected-route": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Healthcheck Protected Route",
+        "operationId": "healthcheck_protected_route_healthcheck_protected_route_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_auth_login_post",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Username"
+            }
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Password"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Refresh",
+        "operationId": "refresh_auth_refresh_post",
+        "parameters": [
+          {
+            "name": "refresh_token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Refresh Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get User",
+        "operationId": "get_user_users__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/users/users": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List Users",
+        "operationId": "list_users_users_users_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(asc|desc)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserRead"
+                  },
+                  "title": "Response List Users Users Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_id}": {
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update User",
+        "operationId": "update_user_users__user_id__put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Delete User",
+        "operationId": "delete_user_users__user_id__delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/users/all": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Delete All Users",
+        "operationId": "delete_all_users_users_all_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/users/update-location": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update Location",
+        "operationId": "update_location_users_update_location_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Latitude"
+            }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Longitude"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/add-role/{user_email}": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Add Role",
+        "operationId": "add_role_users_add_role__user_email__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_email",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Email"
+            }
+          },
+          {
+            "name": "admin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Admin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Create Task",
+        "operationId": "create_task_tasks__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "List Tasks",
+        "operationId": "list_tasks_tasks__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(asc|desc)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order"
+            }
+          },
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "name": "distance",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Distance in meters",
+              "title": "Distance"
+            },
+            "description": "Distance in meters"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskRead"
+                  },
+                  "title": "Response List Tasks Tasks  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Get Task",
+        "operationId": "get_task_tasks__task_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Update Task",
+        "operationId": "update_task_tasks__task_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Task"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Delete Task",
+        "operationId": "delete_task_tasks__task_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/upload/{task_id}": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Upload File",
+        "operationId": "upload_file_tasks_upload__task_id__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Latitude"
+            }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Longitude"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_tasks_upload__task_id__post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/delete/{task_id}/{file_id}": {
+      "delete": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Delete File",
+        "operationId": "delete_file_tasks_delete__task_id___file_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/download/{task_id}": {
+      "get": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Download Files",
+        "operationId": "download_files_tasks_download__task_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/user/tasks": {
+      "get": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Get User Tasks",
+        "operationId": "get_user_tasks_tasks_user_tasks_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskRead"
+                  },
+                  "type": "array",
+                  "title": "Response Get User Tasks Tasks User Tasks Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/tasks/all": {
+      "delete": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Delete All Tasks",
+        "operationId": "delete_all_tasks_tasks_all_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/tasks/{task_id}/complete": {
+      "put": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Complete Task",
+        "operationId": "complete_task_tasks__task_id__complete_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/update-device-token": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Update Device Token",
+        "operationId": "update_device_token_notifications_update_device_token_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/send-notification": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Send Notification",
+        "operationId": "send_notification_notifications_send_notification_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "title",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Title"
+            }
+          },
+          {
+            "name": "body",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Body"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/user-tokens": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get User Tokens",
+        "operationId": "get_user_tokens_notifications_user_tokens_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response Get User Tokens Notifications User Tokens Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/wallet/balance": {
+      "get": {
+        "tags": [
+          "Wallet"
+        ],
+        "summary": "Get Balance",
+        "operationId": "get_balance_wallet_balance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "number",
+                  "title": "Response Get Balance Wallet Balance Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/wallet/transactions": {
+      "get": {
+        "tags": [
+          "Wallet"
+        ],
+        "summary": "Get Transactions",
+        "operationId": "get_transactions_wallet_transactions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Transaction"
+                  },
+                  "type": "array",
+                  "title": "Response Get Transactions Wallet Transactions Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AuthResponse": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "title": "Id Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token",
+          "refresh_token",
+          "expires_in",
+          "token_type"
+        ],
+        "title": "AuthResponse"
+      },
+      "Body_upload_file_tasks_upload__task_id__post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "title": "Body_upload_file_tasks_upload__task_id__post"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Location": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "Point"
+          },
+          "coordinates": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Coordinates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "coordinates"
+        ],
+        "title": "Location",
+        "example": {
+          "coordinates": [-122.4194, 37.7749],
+          "type": "Point"
+        }
+      },
+      "MinioMediaObject": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "download_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Url"
+          },
+          "expiry": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry"
+          },
+          "uploaded_by": {
+            "type": "string",
+            "title": "Uploaded By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "file_name",
+          "location"
+        ],
+        "title": "MinioMediaObject"
+      },
+      "Task": {
+        "properties": {
+          "_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "example": "5eb7cf5a86d9755df3a6c593"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": " Id",
+            "description": "MongoDB document ObjectID"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "reward_amount": {
+            "type": "number",
+            "title": "Reward Amount"
+          },
+          "reward_currency": {
+            "type": "string",
+            "title": "Reward Currency"
+          },
+          "received_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Received Date"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due Date"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "image_urls": {
+            "items": {
+              "$ref": "#/components/schemas/MinioMediaObject"
+            },
+            "type": "array",
+            "title": "Image Urls",
+            "default": []
+          },
+          "video_urls": {
+            "items": {
+              "$ref": "#/components/schemas/MinioMediaObject"
+            },
+            "type": "array",
+            "title": "Video Urls",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "title",
+          "description",
+          "location",
+          "reward_amount",
+          "reward_currency",
+          "received_date",
+          "due_date",
+          "status"
+        ],
+        "title": "Task",
+        "example": {
+          "description": "Want to check Baga beach",
+          "due_date": "2023-01-02T00:00:00Z",
+          "image_urls": [],
+          "location": {
+            "coordinates": [-122.4194, 37.7749],
+            "type": "Point"
+          },
+          "received_date": "2023-01-01T00:00:00Z",
+          "reward_amount": 1.99,
+          "reward_currency": "Drop",
+          "status": "pending",
+          "title": "Take a picture of Baga beach",
+          "user_id": "60d5f9b8e1d3c2b2b8e1d3c2",
+          "video_urls": []
+        }
+      },
+      "TaskCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "reward_amount": {
+            "type": "number",
+            "title": "Reward Amount"
+          },
+          "reward_currency": {
+            "type": "string",
+            "title": "Reward Currency"
+          },
+          "received_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Received Date"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due Date"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "image_urls": {
+            "items": {
+              "$ref": "#/components/schemas/MinioMediaObject"
+            },
+            "type": "array",
+            "title": "Image Urls",
+            "default": []
+          },
+          "video_urls": {
+            "items": {
+              "$ref": "#/components/schemas/MinioMediaObject"
+            },
+            "type": "array",
+            "title": "Video Urls",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "location",
+          "reward_amount",
+          "reward_currency",
+          "received_date",
+          "due_date",
+          "status"
+        ],
+        "title": "TaskCreate",
+        "example": {
+          "description": "Want to check Baga beach",
+          "due_date": "2023-01-02T00:00:00Z",
+          "image_urls": [],
+          "location": {
+            "coordinates": [-122.4194, 37.7749],
+            "type": "Point"
+          },
+          "received_date": "2023-01-01T00:00:00Z",
+          "reward_amount": 1.99,
+          "reward_currency": "Drop",
+          "status": "pending",
+          "title": "Take a picture of Baga beach",
+          "video_urls": []
+        }
+      },
+      "TaskRead": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "reward_amount": {
+            "type": "number",
+            "title": "Reward Amount"
+          },
+          "reward_currency": {
+            "type": "string",
+            "title": "Reward Currency"
+          },
+          "received_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Received Date"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due Date"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "image_urls": {
+            "items": {
+              "$ref": "#/components/schemas/MinioMediaObject"
+            },
+            "type": "array",
+            "title": "Image Urls",
+            "default": []
+          },
+          "video_urls": {
+            "items": {
+              "$ref": "#/components/schemas/MinioMediaObject"
+            },
+            "type": "array",
+            "title": "Video Urls",
+            "default": []
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "location",
+          "reward_amount",
+          "reward_currency",
+          "received_date",
+          "due_date",
+          "status",
+          "id",
+          "user_id"
+        ],
+        "title": "TaskRead",
+        "example": {
+          "description": "Want to check Baga beach",
+          "due_date": "2023-01-02T00:00:00Z",
+          "image_urls": [],
+          "location": {
+            "coordinates": [-122.4194, 37.7749],
+            "type": "Point"
+          },
+          "received_date": "2023-01-01T00:00:00Z",
+          "reward_amount": 1.99,
+          "reward_currency": "Drop",
+          "status": "pending",
+          "title": "Take a picture of Baga beach",
+          "video_urls": []
+        }
+      },
+      "Transaction": {
+        "properties": {
+          "_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "example": "5eb7cf5a86d9755df3a6c593"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": " Id",
+            "description": "MongoDB document ObjectID"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "transaction_type": {
+            "type": "string",
+            "title": "Transaction Type"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "amount",
+          "transaction_type",
+          "description"
+        ],
+        "title": "Transaction"
+      },
+      "UserRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/UserSetting"
+          },
+          "locations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Location"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locations",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "settings"
+        ],
+        "title": "UserRead"
+      },
+      "UserSetting": {
+        "properties": {
+          "notifications_enabled": {
+            "type": "boolean",
+            "title": "Notifications Enabled",
+            "default": true
+          },
+          "dark_mode": {
+            "type": "boolean",
+            "title": "Dark Mode",
+            "default": false
+          },
+          "search_radius": {
+            "type": "number",
+            "title": "Search Radius",
+            "default": 1000
+          }
+        },
+        "type": "object",
+        "title": "UserSetting"
+      },
+      "UserUpdate": {
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/UserSetting"
+          },
+          "locations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Location"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locations",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "title": "UserUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
