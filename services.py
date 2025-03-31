@@ -10,11 +10,6 @@ class CrowdDropServices:
     def __init__(self, api_base_url=None, username=None, password=None):
         """
         Initializes the CrowdDropServices class.
-
-        Args:
-            api_base_url (str, optional): The base URL of the Crowddrop API. If None, it will be read from the .env file.
-            username (str, optional): The username for authentication. If None, it will be read from the .env file.
-            password (str, optional): The password for authentication. If None, it will be read from the .env file.
         """
         if api_base_url is None:
             self.api_base_url = os.getenv("API_BASE_URL")
@@ -38,12 +33,11 @@ class CrowdDropServices:
         else:
             self.password = password
 
-    def authenticate_crowddrop(self):
+        self.token = None  # Added token as a property
+
+    def authenticate(self):
         """
         Authenticates with the Crowddrop API and returns the authentication token.
-
-        Returns:
-            str: The authentication token (id_token) if successful, None otherwise.
         """
         auth_url = f"{self.api_base_url}/auth/login"
 
@@ -62,7 +56,8 @@ class CrowdDropServices:
             response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
 
             response_json = response.json()
-            return response_json.get('id_token')
+            self.token = response_json.get('id_token')  # Assign token to self.token
+            return self.token
 
         except requests.exceptions.RequestException as e:
             print(f"Authentication failed: {e}")
@@ -76,19 +71,93 @@ class CrowdDropServices:
             print(f"response text: {response.text}")
             return None
 
+    def get_tasks(self, page=1, size=10):
+        """
+        Retrieves tasks from the Crowddrop API with pagination and authorization.
+        """
+        if self.token is None:
+            print("Authentication token is missing. Please authenticate first.")
+            return None
+
+        url = f"{self.api_base_url}/tasks/"
+
+        headers = {
+            'accept': 'application/json',
+            'Authorization': f'Bearer {self.token}',
+        }
+
+        params = {
+            'page': page,
+            'size': size,
+        }
+
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            print(f"API request failed: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"Failed to decode json: {e}")
+            print(f"response text: {response.text}")
+            return None
+
+    def get_task(self, task_id):
+        """
+        Retrieves a single task from the Crowddrop API by its ID.
+        """
+        if self.token is None:
+            print("Authentication token is missing. Please authenticate first.")
+            return None
+
+        url = f"{self.api_base_url}/tasks/{task_id}"
+
+        headers = {
+            'accept': 'application/json',
+            'Authorization': f'Bearer {self.token}',
+        }
+
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            print(f"API request failed: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"Failed to decode json: {e}")
+            print(f"response text: {response.text}")
+            return None
+
 if __name__ == "__main__":
     """
     Example usage of the CrowdDropServices class.
     """
 
     crowddrop_service = CrowdDropServices()  # Initializes the class. Username and password are now pulled from the .env file.
-    token = crowddrop_service.authenticate_crowddrop()
 
-    if token:
-        print(f"Authentication successful. Token: {token}")
-        # You can now use the 'token' variable for subsequent API requests
-        # Example:
-        # headers = {'Authorization': f'Bearer {token}', 'accept': 'application/json'}
-        # ... make other API calls using crowddrop_service and the token ...
+    if crowddrop_service.authenticate():
+        print(f"Authentication successful. Token: {crowddrop_service.token}")
+
+        tasks = crowddrop_service.get_tasks(page=1, size=10)  # Call get_tasks here.
+
+        if tasks:
+            print("All tasks:")
+            print(json.dumps(tasks, indent=2))
+        else:
+            print("Failed to retrieve tasks.")
+
+        task_id = "67b8760e920af4b7a5ba837f"  # Replace with a valid task ID
+        task = crowddrop_service.get_task(task_id)
+
+        if task:
+            print(f"\nTask with ID {task_id}:")
+            print(json.dumps(task, indent=2))
+        else:
+            print(f"Failed to retrieve task with ID {task_id}.")
+
     else:
         print("Authentication failed.")
