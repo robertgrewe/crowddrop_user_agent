@@ -2,6 +2,7 @@ from langchain_community.agent_toolkits.openapi import planner
 from langchain_community.agent_toolkits.openapi.spec import reduce_openapi_spec
 from langchain_community.utilities import RequestsWrapper
 from langchain_openai import ChatOpenAI
+from langchain_community.llms import LlamaCpp
 from langchain.tools import Tool
 from langchain_core.tools import tool
 from dotenv import load_dotenv, find_dotenv
@@ -118,12 +119,22 @@ if __name__ == "__main__":
     This script will ask a question to the OpenAPI agent for Crowddrop API.
     """
 
+# for models on GitHub: https://github.com/marketplace/models/azureml-meta/Llama-3-3-70B-Instruct/playground
+
     llm = ChatOpenAI(
         model_name="gpt-4o-mini",
+        #model_name="gpt-4o",
         temperature=0.0,
         api_key=API_GITHUB_KEY,
         base_url=API_GITHUB_BASE_URL,
     )
+
+    # llm = LlamaCpp(
+    #     model_path=LLAMA_MODEL_PATH,
+    #     temperature=0.0,
+    #     n_ctx=2048,  # Adjust context window as needed
+    #     n_gpu_layers=1,  # Use GPU if available
+    # )
 
     with open("./crowddrop_openapi.yaml") as f:
         raw_openai_api_spec = yaml.load(f, Loader=yaml.Loader)
@@ -135,34 +146,41 @@ if __name__ == "__main__":
         exit()
 
     tools = [
-        Tool(
-            name="api_request",
-            func=lambda input_dict: make_api_request(
-                API_BASE_URL,
-                endpoint=input_dict.get("endpoint"),
-                method=input_dict.get("method"),
-                headers={"Authorization": f"Bearer {access_token}"} if access_token else None,
-                params=input_dict.get("params"),
-                data=input_dict.get("data"),
-                token=access_token,
-            ),
-            description="Use this tool to make authorized API requests. Include the 'Authorization: Bearer <token>' header using the provided token for endpoints that require authentication. The input must be a JSON object containing the keys 'endpoint', 'method', 'params' (optional), and 'data' (optional)."
-            "An equivalent curl call would look like this: curl -X 'GET' \
-  'https://dev.crowddrop.aidobotics.ai/app/tasks/?page=1&size=10' \
-  -H 'accept: application/json' \
-  -H 'Authorization: Bearer <token>'",
-        )
+#         Tool(
+#             name="api_request",
+#             func=lambda input_dict: make_api_request(
+#                 API_BASE_URL,
+#                 endpoint=input_dict.get("endpoint"),
+#                 method=input_dict.get("method"),
+#                 headers={"Authorization": f"Bearer {access_token}"} if access_token else None,
+#                 params=input_dict.get("params"),
+#                 data=input_dict.get("data"),
+#                 token=access_token,
+#             ),
+#             description="Use this tool to make authorized API requests. Include the 'Authorization: Bearer <token>' header using the provided token for endpoints that require authentication. The input must be a JSON object containing the keys 'endpoint', 'method', 'params' (optional), and 'data' (optional)."
+#             "An equivalent curl call would look like this: curl -X 'GET' \
+#   'https://dev.crowddrop.aidobotics.ai/app/tasks/?page=1&size=10' \
+#   -H 'accept: application/json' \
+#   -H 'Authorization: Bearer <token>'",
+#         )
     ]
+
+    # Configure RequestsWrapper with the Authorization header
+    headers = {"Authorization": f"Bearer {access_token}", "accept": "application/json"}
+    requests_wrapper = RequestsWrapper(headers=headers)
 
     openapi_agent = planner.create_openapi_agent(
         api_spec=openai_api_spec,
         llm=llm,
-        requests_wrapper=RequestsWrapper(),
+        requests_wrapper=requests_wrapper,
         tools=tools,
         verbose=True,
         allow_dangerous_requests=True,
     )
 
-    user_query = "List all tasks."
+
+    #user_query = f"Get task with id=67b8760e920af4b7a5ba837f. Always include the Authorization header with Bearer {access_token} and accept: application/json when making API calls. Before making an API call always print out the equivalent curl command."
+    #user_query = f"List all tasks. Always include the Authorization header with Bearer {access_token} when making API calls."
+    user_query = f"Get task with id=67b8760e920af4b7a5ba837f."
     response = openapi_agent.invoke(user_query)
     print(f"response: {response}")
