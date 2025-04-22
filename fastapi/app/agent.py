@@ -13,7 +13,7 @@ import requests
 import urllib.parse
 import subprocess
 
-from services import CrowdDropServices  # Import the class
+from fastapi.app.services import CrowdDropServices  # Import the class
 
 load_dotenv(find_dotenv())
 

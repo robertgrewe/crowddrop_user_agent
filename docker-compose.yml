@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+
+  ollama:  
+    image: ollama/ollama  
+    container_name: ollama  
+    restart: always  
+    networks:  
+      - proxynet  
+    volumes:  
+      - ollama_data:/root/.ollama  
+    ports:  
+      - "11434:11434"
+
+  fastapi:
+    image: "fastapi:latest"
+    build:
+        context: ./fastapi
+        dockerfile: ./docker/Dockerfile
+    restart: always
+    container_name: fastapi
+    networks:
+      - proxynet
+    ports:
+        - 8000:8000
+    expose:
+        - 8000
+
+volumes:  
+  ollama_data: 
+
+networks:
+  proxynet:
+    name: smart_network
