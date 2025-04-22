@@ -4,7 +4,10 @@ from pydantic import BaseModel
 import requests
 import os
 from dotenv import load_dotenv
-import json  # Import the json module
+import json
+from langchain_community.llms import Ollama
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 
 # Load environment variables from .env file
 load_dotenv()
@@ -20,14 +23,33 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-class ChatRequest(BaseModel):
-    model: str = "llama3"  # Specify the Ollama model you want to use
+class ChatRequestRaw(BaseModel):
+    model: str = "llama3"
     prompt: str
 
-@app.post("/generate/ollama")
-async def generate_ollama(request: ChatRequest):
+class Message(BaseModel):
+    role: str
+    content: str
+
+    def to_langchain_message(self) -> BaseMessage:
+        if self.role == "user":
+            return HumanMessage(content=self.content)
+        elif self.role == "assistant":
+            return AIMessage(content=self.content)
+        else:
+            raise ValueError(f"Invalid role: {self.role}")
+
+class ChatRequestLangchain(BaseModel):
+    model: str = "llama3"
+    messages: list[Message]
+    temperature: float = 0.0
+    max_tokens: int | None = None
+    timeout: float | None = None
+
+@app.post("/generate/ollama_raw")
+async def generate_ollama_raw(request: ChatRequestRaw):
     try:
-        ollama_base_url = "http://ollama:11434/api"  # Use the service name 'ollama'
+        ollama_base_url = "http://ollama:11434/api"
         ollama_generate_url = f"{ollama_base_url}/generate"
 
         payload = {
@@ -58,6 +80,30 @@ async def generate_ollama(request: ChatRequest):
 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error communicating with Ollama: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat/ollama_langchain")
+async def chat_ollama_langchain(request: ChatRequestLangchain):
+    try:
+        llm = Ollama(
+            model=request.model,
+            temperature=request.temperature,
+            base_url="http://ollama:11434",
+            verbose=True
+        )
+
+        langchain_messages = [msg.to_langchain_message() for msg in request.messages]
+
+        config = {}
+        if request.max_tokens is not None:
+            config["max_tokens"] = request.max_tokens
+        if request.timeout is not None:
+            config["timeout"] = request.timeout
+
+        response = llm.invoke(langchain_messages, config=RunnableConfig(**config))
+        return {"response": response}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
