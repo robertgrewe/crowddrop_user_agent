@@ -1,8 +1,10 @@
 from langchain_community.agent_toolkits.openapi import planner
 from langchain_community.agent_toolkits.openapi.spec import reduce_openapi_spec
 from langchain_community.utilities import RequestsWrapper
-from langchain_openai import ChatOpenAI
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_ollama import OllamaLLM
+from langchain.agents import initialize_agent, AgentType
+from langchain.chat_models import ChatOpenAI
 from langchain.tools import Tool
 from langchain_core.tools import tool
 from dotenv import load_dotenv, find_dotenv
@@ -12,6 +14,9 @@ import os
 import requests
 import urllib.parse
 import subprocess
+import asyncio
+
+
 
 from services import CrowdDropServices  # Import the class
 
@@ -209,6 +214,51 @@ if __name__ == "__main__":
 #         )
     ]
 
+    # --------
+
+    # Launch docker container with MCP server
+
+    #url = "http://host.docker.internal:8000/mcp"
+    #url = "http://127.0.0.1:8000/mcp"
+    url = "http://localhost:8000/mcp"
+    #url = "localhost:8000/mcp"
+
+
+    mcp_client = MultiServerMCPClient({
+        "local": {
+            "transport": "sse",
+            "url": url,  # exact SSE endpoint URL here
+            #"timeout": 20.0  # increase if supported
+        }
+    })
+
+    async def load_tools():
+        tools = await mcp_client.get_tools()
+        return tools
+
+    tools = asyncio.run(load_tools())
+
+    async def main():
+        agent = initialize_agent(
+            tools,  # tools loaded from MultiServerMCPClient
+            llm,
+            agent=AgentType.OPENAI_FUNCTIONS,
+            verbose=True,
+        )
+
+        user_query = "What tools are available?"
+        response = await agent.ainvoke({"input": user_query})
+        print(f"response: {response}")
+
+        user_query = "Add 10 to 5 and return the result."
+        response = await agent.ainvoke({"input": user_query})
+        print(f"response: {response}")
+
+    # Directly invoke the async function
+    asyncio.run(main())
+
+    # --------
+
     # Configure RequestsWrapper with the Authorization header
     headers = {"Authorization": f"Bearer {access_token}", "accept": "application/json"}
     requests_wrapper = RequestsWrapper(headers=headers)
@@ -222,9 +272,9 @@ if __name__ == "__main__":
         allow_dangerous_requests=True,
     )
 
-
     #user_query = f"Get task with id=67b8760e920af4b7a5ba837f. Always include the Authorization header with Bearer {access_token} and accept: application/json when making API calls. Before making an API call always print out the equivalent curl command."
     #user_query = f"List all tasks. Always include the Authorization header with Bearer {access_token} when making API calls."
     user_query = f"Get task with id=685ec38520ae2999c561dabb."
+
     response = openapi_agent.invoke(user_query)
     print(f"response: {response}")
