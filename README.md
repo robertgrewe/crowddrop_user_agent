@@ -24,7 +24,9 @@ https://hub.docker.com/r/ollama/ollama
 ## Models
 Download models by running:
 
-```docker exec -it ollama ollama run llama3```
+```docker exec -it ollama ollama run llama3``` # llama3:latest model on Ollama does not have built-in support for tool calling (also known as function calling)
+
+```docker exec -it ollama ollama run llama3-groq-tool-use``` # llama3-groq-tool-use: This is a popular choice and often recommended for its tool-calling capabilities with Ollama.
 
 ## Example conversation
 
