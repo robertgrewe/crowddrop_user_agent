@@ -11,11 +11,10 @@ services:
       - proxynet
     volumes:
       - ollama_data:/root/.ollama
+      - ./entrypoint.sh:/entrypoint.sh # Mount your custom entrypoint script
     ports:
       - "11434:11434"
-    entrypoint: ["/bin/bash", "-c"] # Still correct: Override to use bash -c
-    # --- CRUCIAL CHANGE: All commands on one line, separated by semicolons ---
-    command: "/bin/ollama serve & OLLAMA_PID=$!; echo 'Waiting for Ollama server to start...'; sleep 10; echo 'Downloading Ollama models...'; ollama pull llama3; ollama pull llama3-groq-tool-use; echo 'Model download complete.'; wait $OLLAMA_PID"
+    entrypoint: ["/entrypoint.sh"] # Use your custom entrypoint script
 
   fastapi:
     image: "fastapi:latest"
