@@ -1,4 +1,4 @@
-# docker-compose.yml (Final Attempt - Direct shell execution of script)
+# docker-compose.yml
 version: "3.8"
 
 services:
@@ -10,16 +10,11 @@ services:
     networks:
       - proxynet
     volumes:
-      # Keep the mount as it is, it's working correctly now
-      - ${PWD}/entrypoint.sh:/usr/local/bin/ollama-startup.sh 
-      - ollama_data:/root/.ollama
+      - ollama_data:/root/.ollama # Keep your data volume
     ports:
       - "11434:11434"
-    # --- CRITICAL CHANGE: Only the script path as the command to /bin/sh ---
-    # The container's effective command will be: /bin/sh -c "/usr/local/bin/ollama-startup.sh"
-    # This tells /bin/sh to read and execute the content of that file.
-    entrypoint: ["/bin/sh"] # Execute /bin/sh directly
-    command: ["-c", "/usr/local/bin/ollama-startup.sh"] # Pass the script's path as the command string to -c
+    # No custom entrypoint or command needed here.
+    # The image's default entrypoint will start the ollama server.
 
   fastapi:
     image: "fastapi:latest"
