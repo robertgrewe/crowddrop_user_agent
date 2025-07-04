@@ -128,23 +128,23 @@ if __name__ == "__main__":
 
 # for models on GitHub: https://github.com/marketplace/models/azureml-meta/Llama-3-3-70B-Instruct/playground
 
-    llm = ChatOpenAI(
-        model_name="gpt-4o-mini",
-        #model_name="gpt-4o",
-        temperature=0.0,
-        api_key=API_GITHUB_KEY,
-        base_url=API_GITHUB_BASE_URL,
-    )
+    # llm = ChatOpenAI(
+    #     model_name="gpt-4o-mini",
+    #     #model_name="gpt-4o",
+    #     temperature=0.0,
+    #     api_key=API_GITHUB_KEY,
+    #     base_url=API_GITHUB_BASE_URL,
+    # )
 
     # local model running in docker container
-    # llm = OllamaLLM(
-    #     model="llama3", 
-    #     temperature=0.0, 
-    #     max_tokens=None, 
-    #     timeout=None, 
-    #     max_retries=2, 
-    #     base_url="http://localhost:11434",
-    #     verbose=True)
+    llm = OllamaLLM(
+        model="llama3-groq-tool-use", # llama3-groq-tool-use, llama3
+        temperature=0.0, 
+        max_tokens=None, 
+        timeout=None, 
+        max_retries=2, 
+        base_url="http://localhost:11434",
+        verbose=True)
 
     # llm = LlamaCpp(
     #     model_path=LLAMA_MODEL_PATH,
@@ -255,16 +255,16 @@ if __name__ == "__main__":
         response = await agent.ainvoke({"input": user_query})
         print(f"response: {response}")
 
-        user_query = "Add 10 to 5 and return the result."
-        response = await agent.ainvoke({"input": user_query})
-        print(f"response: {response}")
+        # user_query = "Add 10 to 5 and return the result."
+        # response = await agent.ainvoke({"input": user_query})
+        # print(f"response: {response}")
 
-        user_query = "List all CrowdDrop operations."
-        response = await agent.ainvoke({"input": user_query})
-        print(f"response: {response}")
+        # user_query = "List all CrowdDrop operations."
+        # response = await agent.ainvoke({"input": user_query})
+        # print(f"response: {response}")
 
     # Directly invoke the async function
-    #asyncio.run(main())
+    asyncio.run(main())
 
     # --------
 
@@ -284,7 +284,9 @@ if __name__ == "__main__":
     #user_query = f"Get task with id=67b8760e920af4b7a5ba837f. Always include the Authorization header with Bearer {access_token} and accept: application/json when making API calls. Before making an API call always print out the equivalent curl command."
     #user_query = f"List all tasks. Always include the Authorization header with Bearer {access_token} when making API calls."
     #user_query = f"Get task with id=6867d69a820a34545cb58224."
-    user_query = f"Work on task with the title Take image of this tree."
+    # user_query = f"Work on task with the title Take image of this tree."
+    #user_query = f"Work on task with the title Take image of this tree. Once done send a notification with the title 'Greeting from Teslabot' and the message 'Hi there, I am a Tesla humanoid robot and I am working hard to finish your task.'"
+
     #user_query = f"Use the work_on endpoint to start workong on task id 6867d69a820a34545cb58224."
 
     response = openapi_agent.invoke(user_query)
