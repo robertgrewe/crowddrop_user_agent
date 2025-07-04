@@ -13,17 +13,9 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    entrypoint: ["/bin/bash", "-c"] # Still correct
-    command: |
-      /bin/ollama serve &
-      OLLAMA_PID=$!
-      echo 'Waiting for Ollama server to start...'
-      sleep 10
-      echo 'Downloading Ollama models...'
-      ollama pull llama3
-      ollama pull llama3-groq-tool-use
-      echo 'Model download complete.'
-      wait $OLLAMA_PID
+    entrypoint: ["/bin/bash", "-c"] # Still correct: Override to use bash -c
+    # --- CRUCIAL CHANGE: All commands on one line, separated by semicolons ---
+    command: "/bin/ollama serve & OLLAMA_PID=$!; echo 'Waiting for Ollama server to start...'; sleep 10; echo 'Downloading Ollama models...'; ollama pull llama3; ollama pull llama3-groq-tool-use; echo 'Model download complete.'; wait $OLLAMA_PID"
 
   fastapi:
     image: "fastapi:latest"
