@@ -13,8 +13,8 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    entrypoint: ["/bin/bash", "-c"] # Still correct: Override to use bash -c
-    command: | # <<< CHANGED THIS TO LITERAL STYLE '|'
+    entrypoint: ["/bin/bash", "-c"] # Still correct
+    command: |
       /bin/ollama serve &
       OLLAMA_PID=$!
       echo 'Waiting for Ollama server to start...'
@@ -35,9 +35,9 @@ services:
     networks:
       - proxynet
     ports:
-        - 8000:8000
+        - 8002:8002
     expose:
-        - 8000
+        - 8002
 
 volumes:
   ollama_data:
