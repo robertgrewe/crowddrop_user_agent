@@ -14,8 +14,8 @@ services:
       - ./entrypoint.sh:/entrypoint.sh
     ports:
       - "11434:11434"
-    # entrypoint: ["/entrypoint.sh"] # <<< COMMENT THIS LINE OUT (add a # at the start)
-    command: ["tail", "-f", "/dev/null"] # <<< ADD THIS LINE. This keeps the container running indefinitely.
+    entrypoint: [] # <<< CORRECTED: This clears the default entrypoint of the ollama image
+    command: ["tail", "-f", "/dev/null"] # <<< This will now be the main command executed
 
   fastapi:
     image: "fastapi:latest"
