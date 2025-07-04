@@ -34,6 +34,7 @@ API_AUTH_URL = os.getenv("API_AUTH_URL")
 API_OPENAPI_SPEC_URL = os.getenv("API_OPENAPI_SPEC_URL")
 CROWDDROP_USERNAME = os.getenv("CROWDDROP_USERNAME")
 CROWDDROP_PASSWORD = os.getenv("CROWDDROP_PASSWORD")
+CROWDDROP_MCP_SERVER = os.getenv("CrowdDrop_MCP_SERVER")
 
 if not CROWDDROP_USERNAME or not CROWDDROP_PASSWORD or not API_GITHUB_KEY or not API_GITHUB_BASE_URL:
     raise ValueError("Missing API credentials or endpoint in environment variables.")
@@ -229,7 +230,11 @@ if __name__ == "__main__":
             "transport": "sse",
             "url": url,  # exact SSE endpoint URL here
             #"timeout": 20.0  # increase if supported
-        }
+        },
+        # "crowddrop": {
+        #     "transport": "sse",
+        #     "url": CROWDDROP_MCP_SERVER,  # URL for the Crowddrop MCP server
+        # },
     })
 
     async def load_tools():
@@ -254,8 +259,12 @@ if __name__ == "__main__":
         response = await agent.ainvoke({"input": user_query})
         print(f"response: {response}")
 
+        user_query = "List all CrowdDrop operations."
+        response = await agent.ainvoke({"input": user_query})
+        print(f"response: {response}")
+
     # Directly invoke the async function
-    asyncio.run(main())
+    #asyncio.run(main())
 
     # --------
 
@@ -274,7 +283,9 @@ if __name__ == "__main__":
 
     #user_query = f"Get task with id=67b8760e920af4b7a5ba837f. Always include the Authorization header with Bearer {access_token} and accept: application/json when making API calls. Before making an API call always print out the equivalent curl command."
     #user_query = f"List all tasks. Always include the Authorization header with Bearer {access_token} when making API calls."
-    user_query = f"Get task with id=685ec38520ae2999c561dabb."
+    #user_query = f"Get task with id=6867d69a820a34545cb58224."
+    user_query = f"Work on task with the title Take image of this tree."
+    #user_query = f"Use the work_on endpoint to start workong on task id 6867d69a820a34545cb58224."
 
     response = openapi_agent.invoke(user_query)
     print(f"response: {response}")
