@@ -13,20 +13,21 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    # NO entrypoint: ["/entrypoint.sh"] line needed here anymore!
-    # NO volumes: - ./entrypoint.sh:/entrypoint.sh line needed anymore!
-    command: > # This allows for a multi-line command string
-      /bin/sh -c "
+    # --- THESE TWO LINES ARE THE CRUCIAL CORRECTION ---
+    entrypoint: ["/bin/bash", "-c"] # Override the image's default entrypoint with a shell that runs a command string
+    command: > # This entire block is now the command string passed to /bin/bash -c
+      "
       /bin/ollama serve &
       OLLAMA_PID=$!
       echo 'Waiting for Ollama server to start...'
-      sleep 10 # Give Ollama a few seconds to fully initialize
+      sleep 10
       echo 'Downloading Ollama models...'
       ollama pull llama3
       ollama pull llama3-groq-tool-use
       echo 'Model download complete.'
       wait $OLLAMA_PID
       "
+    # --- END CORRECTION ---
 
   fastapi:
     image: "fastapi:latest"
