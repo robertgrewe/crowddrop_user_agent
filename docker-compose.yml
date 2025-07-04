@@ -1,4 +1,4 @@
-# docker-compose.yml
+# docker-compose.yml (New Attempt - Explicit Arguments)
 version: "3.8"
 
 services:
@@ -10,18 +10,15 @@ services:
     networks:
       - proxynet
     volumes:
-      # --- CRITICAL CHANGE FOR THE MOUNT ---
-      # Explicitly use the current directory variable on the host for the source path.
-      # Mount it to a new, distinct location and name in the container (e.g., /usr/local/bin/ollama-startup.sh)
-      # On Linux/macOS, ${PWD} works. On Windows, Docker Desktop often handles `./` correctly,
-      # but if not, you might need to use an absolute path like C:/path/to/your/project/entrypoint.sh
+      # Keep the new path for the mounted script, confirmed to be a file
       - ${PWD}/entrypoint.sh:/usr/local/bin/ollama-startup.sh 
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    # --- Execute the mounted script via a shell ---
-    entrypoint: ["/bin/sh", "-c"] 
-    command: "chmod +x /usr/local/bin/ollama-startup.sh && /usr/local/bin/ollama-startup.sh"
+    # --- CRITICAL CHANGE: entrypoint and command as lists ---
+    # The container's effective command will be: /bin/sh -c "chmod +x /path && /path"
+    entrypoint: ["/bin/sh"] # Execute /bin/sh directly
+    command: ["-c", "chmod +x /usr/local/bin/ollama-startup.sh && /usr/local/bin/ollama-startup.sh"]
 
   fastapi:
     image: "fastapi:latest"
