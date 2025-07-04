@@ -11,11 +11,22 @@ services:
       - proxynet
     volumes:
       - ollama_data:/root/.ollama
-      - ./entrypoint.sh:/entrypoint.sh
     ports:
       - "11434:11434"
-    entrypoint: [] # <<< CORRECTED: This clears the default entrypoint of the ollama image
-    command: ["tail", "-f", "/dev/null"] # <<< This will now be the main command executed
+    # NO entrypoint: ["/entrypoint.sh"] line needed here anymore!
+    # NO volumes: - ./entrypoint.sh:/entrypoint.sh line needed anymore!
+    command: > # This allows for a multi-line command string
+      /bin/sh -c "
+      /bin/ollama serve &
+      OLLAMA_PID=$!
+      echo 'Waiting for Ollama server to start...'
+      sleep 10 # Give Ollama a few seconds to fully initialize
+      echo 'Downloading Ollama models...'
+      ollama pull llama3
+      ollama pull llama3-groq-tool-use
+      echo 'Model download complete.'
+      wait $OLLAMA_PID
+      "
 
   fastapi:
     image: "fastapi:latest"
