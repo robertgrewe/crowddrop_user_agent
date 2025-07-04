@@ -13,10 +13,8 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    # --- THESE TWO LINES ARE THE CRUCIAL CORRECTION ---
-    entrypoint: ["/bin/bash", "-c"] # Override the image's default entrypoint with a shell that runs a command string
-    command: > # This entire block is now the command string passed to /bin/bash -c
-      "
+    entrypoint: ["/bin/bash", "-c"]
+    command: > # Corrected: Removed the outer double quotes here
       /bin/ollama serve &
       OLLAMA_PID=$!
       echo 'Waiting for Ollama server to start...'
@@ -26,8 +24,6 @@ services:
       ollama pull llama3-groq-tool-use
       echo 'Model download complete.'
       wait $OLLAMA_PID
-      "
-    # --- END CORRECTION ---
 
   fastapi:
     image: "fastapi:latest"
