@@ -13,8 +13,8 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    entrypoint: ["/bin/bash", "-c"]
-    command: > # Corrected: Removed the outer double quotes here
+    entrypoint: ["/bin/bash", "-c"] # Still correct: Override to use bash -c
+    command: | # <<< CHANGED THIS TO LITERAL STYLE '|'
       /bin/ollama serve &
       OLLAMA_PID=$!
       echo 'Waiting for Ollama server to start...'
