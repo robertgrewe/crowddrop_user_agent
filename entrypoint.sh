@@ -1,25 +1,16 @@
-#!/bin/bash
+#!/bin/sh
+# entrypoint.sh (Content for /usr/local/bin/ollama-startup.sh)
+# No chmod +x needed here or in docker-compose.yml command
 
-# Start Ollama server in the background
 /bin/ollama serve &
 
-# Record the PID of the Ollama server process
-OLLAMA_PID=$!
+echo 'Waiting for Ollama server to start...'
+sleep 10
 
-echo "Waiting for Ollama server to start..."
-# Wait for Ollama to be ready. You can check for port availability or a specific log message.
-# A simple sleep is often enough for Docker Compose. Adjust if needed.
-sleep 10 # Give Ollama a few seconds to fully initialize
-
-echo "Downloading Ollama models..."
-
-# Download llama3
+echo 'Downloading Ollama models...'
 ollama pull llama3
-
-# Download llama3-groq-tool-use
 ollama pull llama3-groq-tool-use
 
-echo "Model download complete."
+echo 'Model download complete.'
 
-# Wait for the Ollama server process to finish (it should run indefinitely)
-wait $OLLAMA_PID
+wait $! # Wait for the ollama serve process to keep the container alive
