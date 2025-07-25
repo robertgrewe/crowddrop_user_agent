@@ -26,9 +26,9 @@ services:
     networks:
       - proxynet
     ports:
-        - 8002:8002
+        - 8003:8003
     expose:
-        - 8002
+        - 8003
 
 volumes:
   ollama_data:

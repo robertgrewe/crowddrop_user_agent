@@ -1,32 +1,30 @@
+# agent.py
+
 from langchain_community.agent_toolkits.openapi import planner
 from langchain_community.agent_toolkits.openapi.spec import reduce_openapi_spec
 from langchain_community.utilities import RequestsWrapper
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_ollama import OllamaLLM
-from langchain.agents import initialize_agent, AgentType
 from langchain.chat_models import ChatOpenAI
-from langchain.tools import Tool
-from langchain_core.tools import tool
+from langchain_core.messages import SystemMessage # Still good to import
 from dotenv import load_dotenv, find_dotenv
-import yaml
 import json
 import os
 import requests
 import urllib.parse
 import subprocess
 import asyncio
+from typing import Optional, Any, Tuple
+import datetime
 
-
-
-from services import CrowdDropServices  # Import the class
+# Assuming CrowdDropServices is in services.py and available
+from services import CrowdDropServices
 
 load_dotenv(find_dotenv())
 
-# Load authentication details from environment variables
-
+# Load authentication details from environment variables (from .env)
 # GITHUB API
 API_GITHUB_KEY = os.getenv("API_GITHUB_KEY")
 API_GITHUB_BASE_URL = os.getenv("API_GITHUB_BASE_URL")
+API_GITHUB_MODEL = os.getenv("API_GITHUB_MODEL", "gpt-4o-mini")  # Default to gpt-4o-mini if not set
 
 # CrowdDrop API
 API_BASE_URL = os.getenv("API_BASE_URL")
@@ -34,21 +32,18 @@ API_AUTH_URL = os.getenv("API_AUTH_URL")
 API_OPENAPI_SPEC_URL = os.getenv("API_OPENAPI_SPEC_URL")
 CROWDDROP_USERNAME = os.getenv("CROWDDROP_USERNAME")
 CROWDDROP_PASSWORD = os.getenv("CROWDDROP_PASSWORD")
-CROWDDROP_MCP_SERVER = os.getenv("CrowdDrop_MCP_SERVER")
 
 if not CROWDDROP_USERNAME or not CROWDDROP_PASSWORD or not API_GITHUB_KEY or not API_GITHUB_BASE_URL:
     raise ValueError("Missing API credentials or endpoint in environment variables.")
 
-def authenticate_and_get_token(api_base_url, username, password):
+def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
     """
+    Authenticates with the API and retrieves an ID token.
     ***CRITICAL:*** Replace this with your API's *actual* authentication method.
     This is a placeholder for demonstration purposes only.
     """
-
-    # URL-encode the username and password
     encoded_username = urllib.parse.quote(username)
     encoded_password = urllib.parse.quote(password)
-
     full_url = f"{API_AUTH_URL}?username={encoded_username}&password={encoded_password}"
 
     curl_command = [
@@ -75,100 +70,30 @@ def authenticate_and_get_token(api_base_url, username, password):
         print(f"Authentication request failed (exception): {e}")
         return None
 
-def make_api_request(api_base_url, endpoint, method, headers=None, params=None, data=None, token=None):
+async def initialize_openapi_agent() -> Tuple[Any, Optional[str], str]:
     """
-    Generic function to make API requests with authentication.
+    Initializes and returns the LangChain OpenAPI agent, the access token,
+    and the Teslabot persona string to be prepended to queries.
     """
-    url = f"{api_base_url}{endpoint}"
-    try:
-        headers = headers or {}
-        if token:
-            headers['Authorization'] = f'Bearer {token}'
-        headers['accept'] = 'application/json'
-        print(f"Request Headers: {headers}") #Added line
-        if method.upper() == "GET":
-            response = requests.get(url, headers=headers, params=params)
-        elif method.upper() == "POST":
-            response = requests.post(url, headers=headers, data=data)
-        elif method.upper() == "PUT":
-            response = requests.put(url, headers=headers, data=data)
-        elif method.upper() == "DELETE":
-            response = requests.delete(url, headers=headers, data=data)
-        else:
-            raise ValueError(f"Unsupported HTTP method: {method}")
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {e}")
-        return None
+    print("Initializing OpenAPI agent within agent.py...")
 
-@tool
-def crowddrop_get_tasks(crowddrop_service: CrowdDropServices, page: int = 1, size: int = 10) -> str:
-    """
-    Retrieves tasks from the Crowddrop API with pagination.
+    # Authenticate and get token
+    access_token = authenticate_and_get_token(CROWDDROP_USERNAME, CROWDDROP_PASSWORD)
+    if access_token is None:
+        print("Authentication failed. Cannot initialize agent without token.")
+        # Return None for agent, token, and persona if auth fails
+        return None, None, ""
 
-    Args:
-        crowddrop_service: An instance of the CrowdDropServices class.
-        page: The page number to retrieve.
-        size: The number of tasks per page.
-    """
-    if crowddrop_service.token is None:
-        if not crowddrop_service.authenticate():
-            return "Authentication failed."
-    tasks = crowddrop_service.get_tasks(page, size)
-    if tasks:
-        return json.dumps(tasks, indent=2)
-    else:
-        return "Failed to retrieve tasks."
-
-if __name__ == "__main__":
-    """
-    This script will ask a question to the OpenAPI agent for Crowddrop API.
-    """
-
-# for models on GitHub: https://github.com/marketplace/models/azureml-meta/Llama-3-3-70B-Instruct/playground
-
-    # llm = ChatOpenAI(
-    #     model_name="gpt-4o-mini",
-    #     #model_name="gpt-4o",
-    #     temperature=0.0,
-    #     api_key=API_GITHUB_KEY,
-    #     base_url=API_GITHUB_BASE_URL,
-    # )
-
-    # local model running in docker container
-    llm = OllamaLLM(
-        model="llama3-groq-tool-use", # llama3-groq-tool-use, llama3
-        temperature=0.0, 
-        max_tokens=None, 
-        timeout=None, 
-        max_retries=2, 
-        base_url="http://localhost:11434",
-        verbose=True)
-
-    # llm = LlamaCpp(
-    #     model_path=LLAMA_MODEL_PATH,
-    #     temperature=0.0,
-    #     n_ctx=2048,  # Adjust context window as needed
-    #     n_gpu_layers=1,  # Use GPU if available
-    # )
-
+    # Load and modify OpenAPI spec
     openapi_spec_url = API_OPENAPI_SPEC_URL
     try:
         response = requests.get(openapi_spec_url)
         response.raise_for_status()
         raw_openai_api_spec = response.json()
 
-        # --- IMPORTANT MODIFICATION HERE ---
-        # Ensure 'servers' key exists and is a list
         if "servers" not in raw_openai_api_spec or not isinstance(raw_openai_api_spec["servers"], list):
             raw_openai_api_spec["servers"] = []
 
-        # Check if the desired base URL is already present to avoid duplicates
-        # We need to ensure the full base URL is there.
-        # Since your current spec has '/app', let's replace it or add the full one.
-        
-        # Option A: Replace if '/app' exists, otherwise add the full URL
         found_full_url = False
         for i, server in enumerate(raw_openai_api_spec["servers"]):
             if server.get("url") == "/app":
@@ -176,118 +101,80 @@ if __name__ == "__main__":
                 found_full_url = True
                 break
         if not found_full_url:
-            raw_openai_api_spec["servers"].insert(0, {"url": API_BASE_URL + "/app"}) # Add it at the beginning
-
-        # You might also want to ensure the root API_BASE_URL is present if some endpoints don't use /app
-        # if not any(s.get("url") == API_BASE_URL for s in raw_openai_api_spec["servers"]):
-        #     raw_openai_api_spec["servers"].insert(0, {"url": API_BASE_URL})
+            raw_openai_api_spec["servers"].insert(0, {"url": API_BASE_URL + "/app"})
 
         print(f"Modified OpenAPI Spec Servers: {raw_openai_api_spec.get('servers')}")
-
         openai_api_spec = reduce_openapi_spec(raw_openai_api_spec)
         print("Successfully loaded and modified OpenAPI spec from URL.")
     except requests.exceptions.RequestException as e:
         print(f"Error fetching OpenAPI spec from URL: {e}")
-        exit()
+        return None, None, "" # Return None for agent, token, and persona if spec loading fails
 
-    access_token = authenticate_and_get_token(API_BASE_URL, CROWDDROP_USERNAME, CROWDDROP_PASSWORD)
-    if access_token is None:
-        print("Authentication failed. Exiting.")
-        exit()
+    # Define the persona string
+    teslabot_persona = (
+        "Pretend to be a Teslabot from Tesla running around on the street around Potsdam, Germany. "
+        #"You are waiting for tasks provided by CrowdDrop. Your primary objective is to "
+        #"efficiently interact with the CrowdDrop API to find, select, and work on tasks. "
+        #"Look for tasks using CrowdDrop's List Tasks endpoint by listing all tasks near Potsdam "
+        #"and select one to work on using the work_on endpoint if a task is pending and suitable. "
+        #"Always be concise and helpful in your responses, focusing on task completion. "
+        f"The current date is {datetime.date.today()} and the current time is {datetime.datetime.now().strftime('%I:%M:%S %p %Z')}."
+    )
 
-    tools = [
-#         Tool(
-#             name="api_request",
-#             func=lambda input_dict: make_api_request(
-#                 API_BASE_URL,
-#                 endpoint=input_dict.get("endpoint"),
-#                 method=input_dict.get("method"),
-#                 headers={"Authorization": f"Bearer {access_token}"} if access_token else None,
-#                 params=input_dict.get("params"),
-#                 data=input_dict.get("data"),
-#                 token=access_token,
-#             ),
-#             description="Use this tool to make authorized API requests. Include the 'Authorization: Bearer <token>' header using the provided token for endpoints that require authentication. The input must be a JSON object containing the keys 'endpoint', 'method', 'params' (optional), and 'data' (optional)."
-#             "An equivalent curl call would look like this: curl -X 'GET' \
-#   'https://dev.crowddrop.aidobotics.ai/app/tasks/?page=1&size=10' \
-#   -H 'accept: application/json' \
-#   -H 'Authorization: Bearer <token>'",
-#         )
-    ]
-
-    # --------
-
-    # Launch docker container with MCP server
-
-    #url = "http://host.docker.internal:8000/mcp"
-    #url = "http://127.0.0.1:8000/mcp"
-    url = "http://localhost:8000/mcp"
-    #url = "localhost:8000/mcp"
-
-
-    mcp_client = MultiServerMCPClient({
-        "local": {
-            "transport": "sse",
-            "url": url,  # exact SSE endpoint URL here
-            #"timeout": 20.0  # increase if supported
-        },
-        # "crowddrop": {
-        #     "transport": "sse",
-        #     "url": CROWDDROP_MCP_SERVER,  # URL for the Crowddrop MCP server
-        # },
-    })
-
-    async def load_tools():
-        tools = await mcp_client.get_tools()
-        return tools
-
-    tools = asyncio.run(load_tools())
-
-    async def main():
-        agent = initialize_agent(
-            tools,  # tools loaded from MultiServerMCPClient
-            llm,
-            agent=AgentType.OPENAI_FUNCTIONS,
-            verbose=True,
-        )
-
-        user_query = "What tools are available?"
-        response = await agent.ainvoke({"input": user_query})
-        print(f"response: {response}")
-
-        # user_query = "Add 10 to 5 and return the result."
-        # response = await agent.ainvoke({"input": user_query})
-        # print(f"response: {response}")
-
-        # user_query = "List all CrowdDrop operations."
-        # response = await agent.ainvoke({"input": user_query})
-        # print(f"response: {response}")
-
-    # Directly invoke the async function
-    asyncio.run(main())
-
-    # --------
+    # Initialize LLM
+    llm = ChatOpenAI(
+        model_name=API_GITHUB_MODEL,
+        temperature=0.0,
+        api_key=API_GITHUB_KEY,
+        base_url=API_GITHUB_BASE_URL,
+    )
 
     # Configure RequestsWrapper with the Authorization header
     headers = {"Authorization": f"Bearer {access_token}", "accept": "application/json"}
     requests_wrapper = RequestsWrapper(headers=headers)
 
-    openapi_agent = planner.create_openapi_agent(
+    tools = [] # Add any custom LangChain tools here if needed, beyond what OpenAPI provides
+
+    # The create_openapi_agent function returns an AgentExecutor
+    openapi_agent_executor = planner.create_openapi_agent(
         api_spec=openai_api_spec,
         llm=llm,
         requests_wrapper=requests_wrapper,
         tools=tools,
-        verbose=True,
+        verbose=True, # Keep verbose for printing during execution
         allow_dangerous_requests=True,
     )
+    print("OpenAPI agent created successfully.")
+    # Return the agent executor, the token, AND the persona string
+    return openapi_agent_executor, access_token, teslabot_persona
 
-    #user_query = f"Get task with id=67b8760e920af4b7a5ba837f. Always include the Authorization header with Bearer {access_token} and accept: application/json when making API calls. Before making an API call always print out the equivalent curl command."
-    #user_query = f"List all tasks. Always include the Authorization header with Bearer {access_token} when making API calls."
-    #user_query = f"Get task with id=6867d69a820a34545cb58224."
-    # user_query = f"Work on task with the title Take image of this tree."
-    #user_query = f"Work on task with the title Take image of this tree. Once done send a notification with the title 'Greeting from Teslabot' and the message 'Hi there, I am a Tesla humanoid robot and I am working hard to finish your task.'"
+if __name__ == "__main__":
+    async def test_agent():
+        # Unpack the returned values: agent, token, and persona
+        agent_executor, token, persona = await initialize_openapi_agent()
+        if agent_executor:
+            # Prepend the persona to the user query
+            user_query = f"{persona} List all tasks and tell me if there's anything I can work on."
+            
+            print(f"\nInvoking agent with query: {user_query}")
+            
+            response = await agent_executor.ainvoke(
+                {"input": user_query},
+                return_intermediate_steps=True
+            )
+            
+            print("\n--- Agent Response ---")
+            print(f"Final Answer: {response.get('output')}")
+            
+            print("\n--- Intermediate Steps ---")
+            if 'intermediate_steps' in response and response['intermediate_steps']:
+                for i, step in enumerate(response['intermediate_steps']):
+                    print(f"Step {i+1}:")
+                    print(f"  Action: {step[0]}") # AgentAction
+                    print(f"  Observation: {step[1]}") # Result of the tool call
+            else:
+                print("No intermediate steps were returned.")
+        else:
+            print("Agent initialization failed. Cannot run test.")
 
-    #user_query = f"Use the work_on endpoint to start workong on task id 6867d69a820a34545cb58224."
-
-    response = openapi_agent.invoke(user_query)
-    print(f"response: {response}")
+    asyncio.run(test_agent())
