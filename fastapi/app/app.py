@@ -66,13 +66,23 @@ async def startup_event():
     response_model=AgentResponse,
     status_code=status.HTTP_200_OK,
     summary="Send a chat message to the agent",
-    description="Sends a natural language chat message to the underlying LangChain hierarchical agent, which can interact with the CrowdDrop API or answer general questions.",
+    description="""
+    Sends a natural language chat message to the underlying LangChain hierarchical agent, which can interact with the CrowdDrop API or answer general questions.
+
+    **Example queries you can try:**
+    - "Who or what are you?"
+    - "Where are you right now?"
+    - "What do you see around you?"
+    - "Work on task with id 68852fa8820a34545cb582c4 by using work_on endpoint."
+    - "What is the weather like in Potsdam, Germany?"
+    """,
     responses={
         status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse, "description": "Agent not initialized"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Internal server error during agent processing"},
     },
     tags=["Agent"]
 )
+
 async def chat(request_body: AgentQueryRequest) -> AgentResponse:
     """
     Processes a user query using the initialized hierarchical agent.
