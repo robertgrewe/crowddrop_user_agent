@@ -70,6 +70,22 @@ def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
         print(f"Authentication request failed (exception): {e}")
         return None
 
+def describe_potsdam_surroundings(query: str) -> str: # <--- ADDED 'query: str' argument
+    """
+    Describes the general surroundings of a Teslabot in Potsdam, Germany.
+    This is a static description.
+    The 'query' argument is accepted but not used, as this tool provides a fixed description.
+    """
+    return (
+        "As a Teslabot operating in Potsdam, Germany, I observe a mix of historic architecture, "
+        "including palaces and old townhouses, alongside more modern urban structures. "
+        "There are numerous well-maintained parks and green spaces, such as Sanssouci Park, "
+        "and the city is dotted with beautiful lakes and canals connected to the Havel River. "
+        "I typically see a combination of paved roads, sidewalks, trees, residential buildings, "
+        "shops, and other people going about their day. Depending on the exact location, "
+        "there might be specific landmarks, cafes, or public transport stops."
+    )
+
 async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     """
     Initializes and returns the LangChain hierarchical agent, the access token,
@@ -184,14 +200,16 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         "Always be concise and helpful in your responses, focusing on task completion or providing requested information. "
         f"The current date is {datetime.date.today().strftime('%Y-%m-%d')} and the current time is {datetime.datetime.now().strftime('%I:%M:%S %p %Z')}."
     )
+    print("Teslabot persona defined successfully.")
 
-    # # Initialize LLM for the main agent (can be the same LLM)
-    # main_llm = ChatOpenAI(
-    #     model_name=API_GITHUB_MODEL,
-    #     temperature=0.0,
-    #     api_key=API_GITHUB_KEY,
-    #     base_url=API_GITHUB_BASE_URL,
-    # )
+    # Create the main agent's tools
+
+    # Create the describe surroundings tool
+    surroundings_tool = Tool(
+        name="describe_surroundings",
+        func=describe_potsdam_surroundings,
+        description="Provides a general description of the Teslabot's typical urban and natural surroundings in Potsdam, Germany."
+    )
 
     # Create a Tool that wraps the CrowdDrop OpenAPI AgentExecutor
     crowddrop_api_tool = Tool(
@@ -217,6 +235,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
 
     # Combine all tools for the main agent
     tools_for_main_agent = [
+        surroundings_tool,
         crowddrop_api_tool,
         # *other_tools # Uncomment if you add other tools
     ]
