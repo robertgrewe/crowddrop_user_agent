@@ -6,7 +6,7 @@ from typing import Optional, Any, List, Tuple
 import asyncio
 
 # IMPORTANT CHANGE: Import the correct initialization function from your agent.py file
-from agent import initialize_hierarchical_agent # Changed from initialize_openapi_agent
+from agent import initialize_hierarchical_agent
 
 # Global variables to hold the initialized agent, token, and persona
 openapi_agent_instance = None # Renamed for clarity, it's now the main hierarchical agent
@@ -15,10 +15,11 @@ global_teslabot_persona = "" # New global variable for the persona string
 
 # Pydantic models for API request and response bodies
 class AgentQueryRequest(BaseModel):
-    message: str = Field(..., example="List all tasks.", description="The natural language query to send to the hierarchical agent.")
+    message: str = Field(..., example="List all tasks including all attributes.", description="The natural language query to send to the hierarchical agent.")
 
 class IntermediateStep(BaseModel):
-    action: str = Field(..., description="The action taken by the agent.")
+    # Updated description to indicate thought process is included
+    action: str = Field(..., description="The action taken by the agent (includes its Thought).")
     observation: str = Field(..., description="The observation received after the action.")
 
 class AgentResponse(BaseModel):
@@ -52,7 +53,7 @@ async def startup_event():
 
     print("FastAPI app starting up: Initializing hierarchical agent...")
     # Unpack all three returned values from initialize_hierarchical_agent
-    agent, token, persona = await initialize_hierarchical_agent() # Changed function call
+    agent, token, persona = await initialize_hierarchical_agent()
     if agent:
         openapi_agent_instance = agent
         global_access_token = token
@@ -82,12 +83,10 @@ async def startup_event():
     },
     tags=["Agent"]
 )
-
 async def chat(request_body: AgentQueryRequest) -> AgentResponse:
     """
     Processes a user query using the initialized hierarchical agent.
-    Includes the Teslabot persona in the query (via system message in agent setup)
-    and returns intermediate steps.
+    Returns intermediate steps, including the agent's thought process.
     """
     if openapi_agent_instance is None:
         raise HTTPException(
@@ -101,19 +100,12 @@ async def chat(request_body: AgentQueryRequest) -> AgentResponse:
             detail="Authentication token not available. Agent cannot make authorized API calls. Check server logs for authentication errors."
         )
     
-    # REMOVED: No longer prepending persona here. The persona is now part of the agent's
-    # system message, so the agent is inherently aware of its persona.
-    # user_query_with_persona = f"{global_teslabot_persona} {request_body.message}"
-    # print(f"Received query (with persona): {user_query_with_persona}")
-
-    print(f"Received query: {request_body.message}") # Log the original message
+    print(f"Received query: {request_body.message}")
 
     try:
-        # Pass the original message directly to the agent.
-        # The agent's system message already contains the persona.
         response = await openapi_agent_instance.ainvoke(
-            {"input": request_body.message}, # Pass the original user message
-            return_intermediate_steps=True # Request intermediate steps
+            {"input": request_body.message},
+            return_intermediate_steps=True
         )
 
         output_content = response.get("output", "No direct output from agent. Check agent's verbose output in server logs for details.")
@@ -121,9 +113,28 @@ async def chat(request_body: AgentQueryRequest) -> AgentResponse:
         intermediate_steps_output: List[IntermediateStep] = []
         if 'intermediate_steps' in response and response['intermediate_steps']:
             for step in response['intermediate_steps']:
-                action = str(step[0]) # Convert AgentAction object to string
-                observation = str(step[1]) # Convert observation to string
-                intermediate_steps_output.append(IntermediateStep(action=action, observation=observation))
+                agent_action = step[0] # This will be an AgentAction object
+                observation = step[1]  # This will be a string observation
+
+                # Extract and format the thought process for AgentType.ZERO_SHOT_REACT_DESCRIPTION
+                action_description = ""
+                if hasattr(agent_action, 'log') and agent_action.log:
+                    # The 'log' contains the full thought, action, and action input as a string
+                    action_description += f"{agent_action.log.strip()}" # Capture the raw log
+                
+                # If the log wasn't complete or for fallback, add tool/input separately
+                elif hasattr(agent_action, 'tool'):
+                    action_description += f"Action: {agent_action.tool}"
+                    if hasattr(agent_action, 'tool_input'):
+                        action_description += f"\nAction Input: {agent_action.tool_input}"
+                
+                # Final fallback
+                if not action_description.strip():
+                     action_description = str(agent_action)
+
+                intermediate_steps_output.append(
+                    IntermediateStep(action=action_description, observation=str(observation))
+                )
 
         return AgentResponse(response=output_content, intermediate_steps=intermediate_steps_output)
     except Exception as e:
