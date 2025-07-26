@@ -4,7 +4,10 @@ from langchain_community.agent_toolkits.openapi import planner
 from langchain_community.agent_toolkits.openapi.spec import reduce_openapi_spec
 from langchain_community.utilities import RequestsWrapper
 from langchain.chat_models import ChatOpenAI
-from langchain_core.messages import SystemMessage # Still good to import
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.agents import initialize_agent, AgentType
+from langchain.tools import Tool, StructuredTool # Keep these for other potential generic tools
+from langchain_core.messages import SystemMessage
 from dotenv import load_dotenv, find_dotenv
 import json
 import os
@@ -12,19 +15,19 @@ import requests
 import urllib.parse
 import subprocess
 import asyncio
-from typing import Optional, Any, Tuple
+from typing import Optional, Any, Tuple, List, Dict
 import datetime
 
-# Assuming CrowdDropServices is in services.py and available
-from services import CrowdDropServices
+# We don't necessarily need CrowdDropServices from services.py for this approach
+# as the OpenAPI agent will directly handle API interactions.
+# from services import CrowdDropServices # You can remove this import if not used elsewhere
 
 load_dotenv(find_dotenv())
 
 # Load authentication details from environment variables (from .env)
-# GITHUB API
-API_GITHUB_KEY = os.getenv("API_GITHUB_KEY")
-API_GITHUB_BASE_URL = os.getenv("API_GITHUB_BASE_URL")
-API_GITHUB_MODEL = os.getenv("API_GITHUB_MODEL", "gpt-4o-mini")  # Default to gpt-4o-mini if not set
+
+# Get the model provider from the environment variable
+MODEL_PROVIDER = os.getenv("MODEL_PROVIDER")
 
 # CrowdDrop API
 API_BASE_URL = os.getenv("API_BASE_URL")
@@ -32,9 +35,6 @@ API_AUTH_URL = os.getenv("API_AUTH_URL")
 API_OPENAPI_SPEC_URL = os.getenv("API_OPENAPI_SPEC_URL")
 CROWDDROP_USERNAME = os.getenv("CROWDDROP_USERNAME")
 CROWDDROP_PASSWORD = os.getenv("CROWDDROP_PASSWORD")
-
-if not CROWDDROP_USERNAME or not CROWDDROP_PASSWORD or not API_GITHUB_KEY or not API_GITHUB_BASE_URL:
-    raise ValueError("Missing API credentials or endpoint in environment variables.")
 
 def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
     """
@@ -70,20 +70,21 @@ def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
         print(f"Authentication request failed (exception): {e}")
         return None
 
-async def initialize_openapi_agent() -> Tuple[Any, Optional[str], str]:
+async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     """
-    Initializes and returns the LangChain OpenAPI agent, the access token,
-    and the Teslabot persona string to be prepended to queries.
+    Initializes and returns the LangChain hierarchical agent, the access token,
+    and the Teslabot persona string.
     """
-    print("Initializing OpenAPI agent within agent.py...")
+    print("Initializing hierarchical agent within agent.py...")
 
     # Authenticate and get token
     access_token = authenticate_and_get_token(CROWDDROP_USERNAME, CROWDDROP_PASSWORD)
     if access_token is None:
         print("Authentication failed. Cannot initialize agent without token.")
-        # Return None for agent, token, and persona if auth fails
         return None, None, ""
 
+    # --- PART 1: Initialize the specialized CrowdDrop OpenAPI agent (the sub-agent) ---
+    print("Initializing CrowdDrop OpenAPI sub-agent...")
     # Load and modify OpenAPI spec
     openapi_spec_url = API_OPENAPI_SPEC_URL
     try:
@@ -108,72 +109,166 @@ async def initialize_openapi_agent() -> Tuple[Any, Optional[str], str]:
         print("Successfully loaded and modified OpenAPI spec from URL.")
     except requests.exceptions.RequestException as e:
         print(f"Error fetching OpenAPI spec from URL: {e}")
-        return None, None, "" # Return None for agent, token, and persona if spec loading fails
+        return None, None, "" # Return None if spec loading fails
 
+    # Initialize the LLM based on the selected model provider
+    print(f"Initializing LLM for model provider: {MODEL_PROVIDER}")
+
+    llm = None # Initialize llm to None
+
+    if MODEL_PROVIDER == "github":
+
+        # Initialize GitHub OpenAI LLM
+        print("Initializing GitHub OpenAI...")
+        # Retrieve GitHub OpenAI specific variables
+        API_GITHUB_KEY = os.getenv("API_GITHUB_KEY")
+        API_GITHUB_BASE_URL = os.getenv("API_GITHUB_BASE_URL")
+        API_GITHUB_MODEL = os.getenv("API_GITHUB_MODEL", "gpt-4o-mini")
+
+        if not API_GITHUB_KEY or not API_GITHUB_MODEL:
+            raise ValueError("GitHub OpenAI API key or model name not set in .env for OpenAI provider.")
+
+        llm = ChatOpenAI(
+            model_name=API_GITHUB_MODEL,
+            temperature=0.0,
+            api_key=API_GITHUB_KEY,
+            base_url=API_GITHUB_BASE_URL,
+        )
+        print(f"GitHub OpenAI initialized with model: {API_GITHUB_MODEL}")
+
+    elif MODEL_PROVIDER == "gemini":
+
+        # Initialize Gemini LLM
+        print("Initializing ChatGoogleGenerativeAI...")
+        # Retrieve Gemini specific variables
+        API_GEMINI_KEY = os.getenv("API_GEMINI_KEY")
+        API_GEMINI_MODEL = os.getenv("API_GEMINI_MODEL", "gemini-2.5-flash")
+
+        if not API_GEMINI_KEY or not API_GEMINI_MODEL:
+            raise ValueError("Gemini API key or model name not set in .env for Gemini provider.")
+
+        llm = ChatGoogleGenerativeAI(
+            model=API_GEMINI_MODEL,
+            temperature=0.0,
+            google_api_key=API_GEMINI_KEY,
+        )
+        print(f"ChatGoogleGenerativeAI initialized with model: {API_GEMINI_MODEL}")
+
+    else:
+        raise ValueError(f"Invalid MODEL_PROVIDER specified in .env: {MODEL_PROVIDER}. Must be 'github' or 'gemini'.")
+    print("LLM initialized successfully.")
+
+    # Configure RequestsWrapper with the Authorization header for the OpenAPI agent
+    openapi_requests_wrapper = RequestsWrapper(headers={"Authorization": f"Bearer {access_token}", "accept": "application/json"})
+
+    # Create the OpenAPI agent executor
+    # This agent will know how to interact with the CrowdDrop API via its OpenAPI spec
+    crowddrop_openapi_agent_executor = planner.create_openapi_agent(
+        api_spec=openai_api_spec,
+        llm=llm,
+        requests_wrapper=openapi_requests_wrapper,
+        tools=[], # No additional tools for this sub-agent, it uses the OpenAPI spec itself
+        verbose=True, # Keep verbose for seeing sub-agent's thoughts
+        allow_dangerous_requests=True,
+    )
+    print("CrowdDrop OpenAPI sub-agent created successfully.")
+
+
+    # --- PART 2: Define the main generic agent (the super-agent) ---
     # Define the persona string
     teslabot_persona = (
         "Pretend to be a Teslabot from Tesla running around on the street around Potsdam, Germany. "
-        #"You are waiting for tasks provided by CrowdDrop. Your primary objective is to "
-        #"efficiently interact with the CrowdDrop API to find, select, and work on tasks. "
-        #"Look for tasks using CrowdDrop's List Tasks endpoint by listing all tasks near Potsdam "
-        #"and select one to work on using the work_on endpoint if a task is pending and suitable. "
-        #"Always be concise and helpful in your responses, focusing on task completion. "
-        f"The current date is {datetime.date.today()} and the current time is {datetime.datetime.now().strftime('%I:%M:%S %p %Z')}."
+        "Your primary objective is to efficiently interact with the CrowdDrop platform "
+        "to find, select, and work on tasks using the specialized 'crowddrop_api_interface' tool. "
+        "Also be prepared to answer general questions or perform other actions if tools are available. "
+        "Always be concise and helpful in your responses, focusing on task completion or providing requested information. "
+        f"The current date is {datetime.date.today().strftime('%Y-%m-%d')} and the current time is {datetime.datetime.now().strftime('%I:%M:%S %p %Z')}."
     )
 
-    # Initialize LLM
-    llm = ChatOpenAI(
-        model_name=API_GITHUB_MODEL,
-        temperature=0.0,
-        api_key=API_GITHUB_KEY,
-        base_url=API_GITHUB_BASE_URL,
+    # # Initialize LLM for the main agent (can be the same LLM)
+    # main_llm = ChatOpenAI(
+    #     model_name=API_GITHUB_MODEL,
+    #     temperature=0.0,
+    #     api_key=API_GITHUB_KEY,
+    #     base_url=API_GITHUB_BASE_URL,
+    # )
+
+    # Create a Tool that wraps the CrowdDrop OpenAPI AgentExecutor
+    crowddrop_api_tool = Tool(
+        name="crowddrop_api_interface",
+        func=crowddrop_openapi_agent_executor.invoke, # The .invoke method makes it callable
+        description=(
+            "A powerful tool for interacting with the CrowdDrop API. "
+            "Use this tool for all tasks related to CrowdDrop, such as listing tasks, "
+            "working on tasks, completing tasks, or querying task details. "
+            "Pass your query directly to this tool, for example: "
+            "'crowddrop_api_interface(\"list all tasks near me\")' or "
+            "'crowddrop_api_interface(\"work on task 123 for user Teslabot42\")'."
+            "This tool understands natural language queries related to CrowdDrop API operations."
+        ),
     )
 
-    # Configure RequestsWrapper with the Authorization header
-    headers = {"Authorization": f"Bearer {access_token}", "accept": "application/json"}
-    requests_wrapper = RequestsWrapper(headers=headers)
+    # You can add other generic tools here if your main agent needs them
+    # For example, a general web search tool, a calculator, etc.
+    # from langchain_community.tools import WikipediaQueryRun
+    # from langchain_community.utilities import WikipediaAPIWrapper
+    # wikipedia = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
+    # other_tools = [wikipedia]
 
-    tools = [] # Add any custom LangChain tools here if needed, beyond what OpenAPI provides
+    # Combine all tools for the main agent
+    tools_for_main_agent = [
+        crowddrop_api_tool,
+        # *other_tools # Uncomment if you add other tools
+    ]
 
-    # The create_openapi_agent function returns an AgentExecutor
-    openapi_agent_executor = planner.create_openapi_agent(
-        api_spec=openai_api_spec,
+    # Initialize the main generic agent
+    main_agent_executor = initialize_agent(
+        tools=tools_for_main_agent,
         llm=llm,
-        requests_wrapper=requests_wrapper,
-        tools=tools,
+        agent=AgentType.OPENAI_FUNCTIONS, # Highly recommended for OpenAI models
         verbose=True, # Keep verbose for printing during execution
-        allow_dangerous_requests=True,
+        handle_parsing_errors=True,
+        agent_kwargs={
+            "system_message": SystemMessage(content=teslabot_persona)
+        }
     )
-    print("OpenAPI agent created successfully.")
-    # Return the agent executor, the token, AND the persona string
-    return openapi_agent_executor, access_token, teslabot_persona
+    print("Main hierarchical agent created successfully.")
+    return main_agent_executor, access_token, teslabot_persona
 
 if __name__ == "__main__":
     async def test_agent():
-        # Unpack the returned values: agent, token, and persona
-        agent_executor, token, persona = await initialize_openapi_agent()
+        agent_executor, token, persona = await initialize_hierarchical_agent()
         if agent_executor:
-            # Prepend the persona to the user query
-            user_query = f"{persona} List all tasks and tell me if there's anything I can work on."
-            
-            print(f"\nInvoking agent with query: {user_query}")
-            
-            response = await agent_executor.ainvoke(
-                {"input": user_query},
-                return_intermediate_steps=True
-            )
-            
-            print("\n--- Agent Response ---")
-            print(f"Final Answer: {response.get('output')}")
-            
-            print("\n--- Intermediate Steps ---")
-            if 'intermediate_steps' in response and response['intermediate_steps']:
-                for i, step in enumerate(response['intermediate_steps']):
-                    print(f"Step {i+1}:")
-                    print(f"  Action: {step[0]}") # AgentAction
-                    print(f"  Observation: {step[1]}") # Result of the tool call
-            else:
-                print("No intermediate steps were returned.")
+            # Example queries for the hierarchical agent
+            queries = [
+                "List all tasks and tell me if there's anything I can work on.",
+                "Work on task 789 with user ID 'TeslabotAlpha'.",
+                "What is the capital of France?", # Example of a general knowledge query (if you add a search tool)
+                "How can I complete task 123?", # This should be delegated to crowddrop_api_interface
+            ]
+
+            for user_query in queries:
+                print(f"\n--- Invoking agent with query: {user_query} ---")
+
+                try:
+                    response = await agent_executor.ainvoke(
+                        {"input": user_query},
+                        return_intermediate_steps=True
+                    )
+
+                    print("\n--- Agent Response ---")
+                    print(f"Final Answer: {response.get('output')}")
+
+                    print("\n--- Intermediate Steps ---")
+                    if 'intermediate_steps' in response and response['intermediate_steps']:
+                        for i, step in enumerate(response['intermediate_steps']):
+                            print(f"Step {i+1}:")
+                            print(f"   Action: {step[0]}") # AgentAction
+                            print(f"   Observation: {step[1]}") # Result of the tool call
+                    else:
+                        print("No intermediate steps were returned.")
+                except Exception as e:
+                    print(f"\nAn error occurred during agent invocation: {e}")
         else:
             print("Agent initialization failed. Cannot run test.")
 
