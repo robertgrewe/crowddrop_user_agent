@@ -244,7 +244,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     main_agent_executor = initialize_agent(
         tools=tools_for_main_agent,
         llm=llm,
-        agent=AgentType.OPENAI_FUNCTIONS, # Highly recommended for OpenAI models
+        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, # Highly recommended for OpenAI models
         verbose=True, # Keep verbose for printing during execution
         handle_parsing_errors=True,
         agent_kwargs={
