@@ -4,26 +4,32 @@ from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import Optional, Any, List, Tuple
 import asyncio
-import os # Import os for environment variables
-from dotenv import load_dotenv, find_dotenv # Import for loading .env
+import os
+import logging # Import the logging module
+from dotenv import load_dotenv, find_dotenv
+
+# Import the centralized logging configuration
+import logging_config # This will automatically run configure_logging()
 
 # IMPORTANT CHANGE: Import the correct initialization function from your agent.py file
-# Corrected import statement: 'app' is not a package in this Docker context.
 from agent import initialize_hierarchical_agent 
 
 load_dotenv(find_dotenv()) # Load environment variables
 
+# Get the logger for this module (it will inherit configuration from logging_config.py)
+logger = logging.getLogger(__name__)
+
+
 # Global variables to hold the initialized agent, token, and persona
-openapi_agent_instance = None # Renamed for clarity, it's now the main hierarchical agent
+openapi_agent_instance = None
 global_access_token = None
-global_teslabot_persona = "" # New global variable for the persona string
+global_teslabot_persona = ""
 
 # Pydantic models for API request and response bodies
 class AgentQueryRequest(BaseModel):
     message: str = Field(..., example="List all tasks including all attributes.", description="The natural language query to send to the hierarchical agent.")
 
 class IntermediateStep(BaseModel):
-    # Updated description to indicate thought process is included
     action: str = Field(..., description="The action taken by the agent (includes its Thought).")
     observation: str = Field(..., description="The observation received after the action.")
 
@@ -54,18 +60,17 @@ async def startup_event():
     """
     global openapi_agent_instance
     global global_access_token
-    global global_teslabot_persona # Access the new global variable
+    global global_teslabot_persona
 
-    print("FastAPI app starting up: Initializing hierarchical agent...")
-    # Unpack all three returned values from initialize_hierarchical_agent
+    logger.info("FastAPI app starting up: Initializing hierarchical agent...")
     agent, token, persona = await initialize_hierarchical_agent()
     if agent:
         openapi_agent_instance = agent
         global_access_token = token
-        global_teslabot_persona = persona # Store the persona
-        print("Hierarchical agent successfully loaded into FastAPI app with persona.")
+        global_teslabot_persona = persona
+        logger.info("Hierarchical agent successfully loaded into FastAPI app with persona.")
     else:
-        print("Failed to initialize agent during startup.")
+        logger.error("Failed to initialize agent during startup.")
 
 @app.post(
     "/chat",
@@ -97,26 +102,28 @@ async def chat(request_body: AgentQueryRequest) -> AgentResponse:
     global openapi_agent_instance
 
     if openapi_agent_instance is None:
+        logger.error("Agent not initialized when /chat endpoint was called.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Agent not initialized. Please try again later. Check server logs for initialization errors."
         )
 
     if global_access_token is None:
+        logger.error("Authentication token not available when /chat endpoint was called.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Authentication token not available. Agent cannot make authorized API calls. Check server logs for authentication errors."
         )
     
     user_query = request_body.message
-    print(f"Received query: {user_query}")
+    logger.info(f"Received query: {user_query}")
 
     # DEBUGGING: Print the chat history before invoking the agent
     # Access the memory via the agent instance
     if openapi_agent_instance.memory:
-        print(f"DEBUG: Chat History BEFORE invoke: {openapi_agent_instance.memory.chat_memory.messages}")
+        logger.debug(f"Chat History BEFORE invoke: {openapi_agent_instance.memory.chat_memory.messages}")
     else:
-        print("DEBUG: Agent has no memory object attached.")
+        logger.debug("Agent has no memory object attached.")
 
     try:
         response = await openapi_agent_instance.ainvoke(
@@ -126,29 +133,24 @@ async def chat(request_body: AgentQueryRequest) -> AgentResponse:
 
         # DEBUGGING: Print the chat history AFTER invoking the agent
         if openapi_agent_instance.memory:
-            print(f"DEBUG: Chat History AFTER invoke: {openapi_agent_instance.memory.chat_memory.messages}")
+            logger.debug(f"Chat History AFTER invoke: {openapi_agent_instance.memory.chat_memory.messages}")
 
         output_content = response.get("output", "No direct output from agent. Check agent's verbose output in server logs for details.")
         
         intermediate_steps_output: List[IntermediateStep] = []
         if 'intermediate_steps' in response and response['intermediate_steps']:
             for step in response['intermediate_steps']:
-                agent_action = step[0] # This will be an AgentAction object
-                observation = step[1]  # This will be a string observation
+                agent_action = step[0]
+                observation = step[1]
 
-                # Extract and format the thought process for AgentType.ZERO_SHOT_REACT_DESCRIPTION
                 action_description = ""
                 if hasattr(agent_action, 'log') and agent_action.log:
-                    # The 'log' contains the full thought, action, and action input as a string
-                    action_description += f"{agent_action.log.strip()}" # Capture the raw log
-                
-                # If the log wasn't complete or for fallback, add tool/input separately
+                    action_description += f"{agent_action.log.strip()}"
                 elif hasattr(agent_action, 'tool'):
                     action_description += f"Action: {agent_action.tool}"
                     if hasattr(agent_action, 'tool_input'):
                         action_description += f"\nAction Input: {agent_action.tool_input}"
                 
-                # Final fallback
                 if not action_description.strip():
                      action_description = str(agent_action)
 
@@ -158,7 +160,7 @@ async def chat(request_body: AgentQueryRequest) -> AgentResponse:
 
         return AgentResponse(response=output_content, intermediate_steps=intermediate_steps_output)
     except Exception as e:
-        print(f"Error invoking agent: {e}")
+        logger.exception(f"Error invoking agent: {e}") # Use logger.exception for full traceback
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing request with agent: {str(e)}"
@@ -176,6 +178,7 @@ async def health_check() -> HealthCheckResponse:
     Provides a simple health check to indicate if the API is running
     and if the core hierarchical agent has been successfully initialized.
     """
+    logger.info("Health check requested.")
     return HealthCheckResponse(status="ok", agent_initialized=openapi_agent_instance is not None)
 
 if __name__ == "__main__":

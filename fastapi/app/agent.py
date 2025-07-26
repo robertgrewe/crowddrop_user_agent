@@ -7,7 +7,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import initialize_agent, AgentType
 from langchain.tools import Tool, StructuredTool
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage # Import HumanMessage, AIMessage for direct memory testing
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from dotenv import load_dotenv, find_dotenv
 import json
 import os
@@ -17,6 +17,10 @@ import subprocess
 import asyncio
 from typing import Optional, Any, Tuple, List, Dict
 import datetime
+import logging # Import the logging module
+
+# Import the centralized logging configuration
+import logging_config # This will automatically run configure_logging()
 
 # NEW IMPORTS for PostgreSQL memory
 from langchain_community.chat_message_histories import PostgresChatMessageHistory
@@ -27,6 +31,10 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, Huma
 
 
 load_dotenv(find_dotenv())
+
+# Get the logger for this module (it will inherit configuration from logging_config.py)
+logger = logging.getLogger(__name__)
+
 
 # Load authentication details from environment variables (from .env)
 
@@ -66,15 +74,15 @@ def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
         stdout, stderr = process.communicate()
 
         if process.returncode != 0:
-            print(f"Authentication request failed (curl): {stderr.decode()}")
+            logger.error(f"Authentication request failed (curl): {stderr.decode()}")
             return None
 
         response_data = json.loads(stdout.decode())
-        print(f"response_data: {response_data}")
+        logger.debug(f"Authentication response data: {response_data}")
         return response_data.get("id_token")
 
     except Exception as e:
-        print(f"Authentication request failed (exception): {e}")
+        logger.exception(f"Authentication request failed (exception): {e}")
         return None
 
 def describe_potsdam_surroundings(query: str) -> str:
@@ -83,6 +91,7 @@ def describe_potsdam_surroundings(query: str) -> str:
     This is a static description.
     The 'query' argument is accepted but not used, as this tool provides a fixed description.
     """
+    logger.debug("describe_potsdam_surroundings tool called.")
     return (
         "As a Teslabot operating in Potsdam, Germany, I observe a mix of historic architecture, "
         "including palaces and old townhouses, alongside more modern urban structures. "
@@ -103,10 +112,12 @@ def retrieve_chat_history(query: str = "") -> str:
     what they said, what the AI said previously, or to summarize the conversation history.
     The 'query' argument is accepted but not used, as this tool provides the full history.
     """
+    logger.debug("retrieve_chat_history tool called.")
     global global_memory_instance
     if global_memory_instance and global_memory_instance.chat_memory:
         messages = global_memory_instance.chat_memory.messages
         if not messages:
+            logger.info("Chat history is currently empty.")
             return "The chat history is currently empty."
         
         history_summary = "Here is a summary of our past conversation:\n"
@@ -116,7 +127,9 @@ def retrieve_chat_history(query: str = "") -> str:
                 history_summary += f"User {i//2 + 1}: {msg.content}\n"
             elif isinstance(msg, AIMessage):
                 history_summary += f"AI {i//2 + 1}: {msg.content}\n"
+        logger.debug(f"Retrieved chat history summary: {history_summary}")
         return history_summary
+    logger.error("Chat memory is not available or initialized for retrieve_chat_history tool.")
     return "Error: Chat memory is not available or initialized."
 
 # NEW: Function to get PostgresChatMessageHistory for a session
@@ -124,7 +137,8 @@ def get_postgres_chat_history(session_id: str) -> PostgresChatMessageHistory:
     """
     Returns a PostgresChatMessageHistory instance for a given session ID.
     """
-    print(f"Connecting to PostgreSQL for session_id: {session_id} using DATABASE_URL: {DATABASE_URL}")
+    # Corrected variable name from DATABASE_LEVEL to DATABASE_URL
+    logger.info(f"Connecting to PostgreSQL for session_id: {session_id} using DATABASE_URL: {DATABASE_URL}")
     return PostgresChatMessageHistory(
         connection_string=DATABASE_URL,
         session_id=session_id
@@ -135,16 +149,16 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     Initializes and returns the LangChain hierarchical agent, the access token,
     and the Teslabot persona string.
     """
-    print("Initializing hierarchical agent within agent.py...")
+    logger.info("Initializing hierarchical agent within agent.py...")
 
     # Authenticate and get token
     access_token = authenticate_and_get_token(CROWDDROP_USERNAME, CROWDDROP_PASSWORD)
     if access_token is None:
-        print("Authentication failed. Cannot initialize agent without token.")
+        logger.error("Authentication failed. Cannot initialize agent without token.")
         return None, None, ""
 
     # --- PART 1: Initialize the specialized CrowdDrop OpenAPI agent (the sub-agent) ---
-    print("Initializing CrowdDrop OpenAPI sub-agent...")
+    logger.info("Initializing CrowdDrop OpenAPI sub-agent...")
     # Load and modify OpenAPI spec
     # Corrected API_OPENAPI_SPEC_URL to use API_BASE_URL for local spec
     openapi_spec_url = API_BASE_URL + "/openapi.json"
@@ -165,28 +179,27 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         if not found_full_url:
             raw_openai_api_spec["servers"].insert(0, {"url": API_BASE_URL + "/app"})
 
-        print(f"Modified OpenAPI Spec Servers: {raw_openai_api_spec.get('servers')}")
+        logger.info(f"Modified OpenAPI Spec Servers: {raw_openai_api_spec.get('servers')}")
         openai_api_spec = reduce_openapi_spec(raw_openai_api_spec)
-        print("Successfully loaded and modified OpenAPI spec from URL.")
+        logger.info("Successfully loaded and modified OpenAPI spec from URL.")
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching OpenAPI spec from URL: {e}")
+        logger.exception(f"Error fetching OpenAPI spec from URL: {e}")
         return None, None, "" # Return None if spec loading fails
 
     # Initialize the LLM based on the selected model provider
-    print(f"Initializing LLM for model provider: {MODEL_PROVIDER}")
+    logger.info(f"Initializing LLM for model provider: {MODEL_PROVIDER}")
 
     llm = None # Initialize llm to None
 
     if MODEL_PROVIDER == "github":
-
-        # Initialize GitHub OpenAI LLM
-        print("Initializing GitHub OpenAI...")
+        logger.info("Initializing GitHub OpenAI...")
         # Retrieve GitHub OpenAI specific variables
         API_GITHUB_KEY = os.getenv("API_GITHUB_KEY")
         API_GITHUB_BASE_URL = os.getenv("API_GITHUB_BASE_URL")
         API_GITHUB_MODEL = os.getenv("API_GITHUB_MODEL", "gpt-4o-mini")
 
         if not API_GITHUB_KEY or not API_GITHUB_MODEL:
+            logger.error("GitHub OpenAI API key or model name not set in .env for OpenAI provider.")
             raise ValueError("GitHub OpenAI API key or model name not set in .env for OpenAI provider.")
 
         llm = ChatOpenAI(
@@ -195,17 +208,16 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
             api_key=API_GITHUB_KEY,
             base_url=API_GITHUB_BASE_URL,
         )
-        print(f"GitHub OpenAI initialized with model: {API_GITHUB_MODEL}")
+        logger.info(f"GitHub OpenAI initialized with model: {API_GITHUB_MODEL}")
 
     elif MODEL_PROVIDER == "gemini":
-
-        # Initialize Gemini LLM
-        print("Initializing ChatGoogleGenerativeAI...")
+        logger.info("Initializing ChatGoogleGenerativeAI...")
         # Retrieve Gemini specific variables
         API_GEMINI_KEY = os.getenv("API_GEMINI_KEY")
         API_GEMINI_MODEL = os.getenv("API_GEMINI_MODEL", "gemini-2.5-flash")
 
         if not API_GEMINI_KEY or not API_GEMINI_MODEL:
+            logger.error("Gemini API key or model name not set in .env for Gemini provider.")
             raise ValueError("Gemini API key or model name not set in .env for Gemini provider.")
 
         llm = ChatGoogleGenerativeAI(
@@ -213,11 +225,12 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
             temperature=0.0,
             google_api_key=API_GEMINI_KEY,
         )
-        print(f"ChatGoogleGenerativeAI initialized with model: {API_GEMINI_MODEL}")
+        logger.info(f"ChatGoogleGenerativeAI initialized with model: {API_GEMINI_MODEL}")
 
     else:
+        logger.critical(f"Invalid MODEL_PROVIDER specified in .env: {MODEL_PROVIDER}. Must be 'github' or 'gemini'.")
         raise ValueError(f"Invalid MODEL_PROVIDER specified in .env: {MODEL_PROVIDER}. Must be 'github' or 'gemini'.")
-    print("LLM initialized successfully.")
+    logger.info("LLM initialized successfully.")
 
     # Configure RequestsWrapper with the Authorization header for the OpenAPI agent
     openapi_requests_wrapper = RequestsWrapper(headers={"Authorization": f"Bearer {access_token}", "accept": "application/json"})
@@ -232,7 +245,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         verbose=True, # Keep verbose for seeing sub-agent's thoughts
         allow_dangerous_requests=True,
     )
-    print("CrowdDrop OpenAPI sub-agent created successfully.")
+    logger.info("CrowdDrop OpenAPI sub-agent created successfully.")
 
 
     # --- PART 2: Define the main generic agent (the super-agent) ---
@@ -265,7 +278,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         "Thought: I now know the final answer\n"
         "Final Answer: the final answer to the original input question"
     )
-    print("Teslabot persona defined successfully.")
+    logger.info("Teslabot persona defined successfully.")
 
     # Create the main agent's tools
 
@@ -332,7 +345,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     global global_memory_instance
     global_memory_instance = memory
 
-    print(f"Agent memory initialized with PostgreSQL for session: {session_id}")
+    logger.info(f"Agent memory initialized with PostgreSQL for session: {session_id}")
 
     # RE-ADDED: Define the prompt template for the conversational agent
     # This explicitly includes the chat history in the prompt
@@ -362,7 +375,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
             "prompt": prompt # Pass the constructed prompt here
         }
     )
-    print("Main hierarchical agent created successfully.")
+    logger.info("Main hierarchical agent created successfully.")
     return main_agent_executor, access_token, teslabot_persona
 
 if __name__ == "__main__":
@@ -370,27 +383,27 @@ if __name__ == "__main__":
         agent_executor, token, persona = await initialize_hierarchical_agent()
         if agent_executor:
             # DEBUGGING: Explicitly test PostgresChatMessageHistory
-            print("\n--- Testing PostgresChatMessageHistory directly ---")
+            logger.info("\n--- Testing PostgresChatMessageHistory directly ---")
             test_session_id = "teslabot_conversation_123_test"
             test_history = get_postgres_chat_history(test_session_id)
-            print(f"Initial test history for session '{test_session_id}': {test_history.messages}")
+            logger.debug(f"Initial test history for session '{test_session_id}': {test_history.messages}")
 
             # Clear any existing history for this test session
             test_history.clear()
-            print(f"History cleared. Current test history: {test_history.messages}")
+            logger.debug(f"History cleared. Current test history: {test_history.messages}")
 
             # Add a message
             test_history.add_user_message("Hello from direct test!")
-            print(f"After adding user message. Current test history: {test_history.messages}")
+            logger.debug(f"After adding user message. Current test history: {test_history.messages}")
 
             # Add an AI message
             test_history.add_ai_message("Hello from AI test!")
-            print(f"After adding AI message. Current test history: {test_history.messages}")
+            logger.debug(f"After adding AI message. Current test history: {test_history.messages}")
 
             # Retrieve messages again to confirm persistence
             retrieved_history = get_postgres_chat_history(test_session_id)
-            print(f"Retrieved history from DB for session '{test_session_id}': {retrieved_history.messages}")
-            print("--- End of direct PostgresChatMessageHistory test ---\n")
+            logger.debug(f"Retrieved history from DB for session '{test_session_id}': {retrieved_history.messages}")
+            logger.info("--- End of direct PostgresChatMessageHistory test ---\n")
 
 
             # Example queries for the hierarchical agent
@@ -403,10 +416,10 @@ if __name__ == "__main__":
             ]
 
             for user_query in queries:
-                print(f"\n--- Invoking agent with query: {user_query} ---")
+                logger.info(f"\n--- Invoking agent with query: {user_query} ---")
                 # DEBUGGING: Print the chat history before invocation
                 # This `memory` object is the one used by the agent_executor
-                print(f"Current Chat History (from agent's memory before invoke): {memory.chat_memory.messages}")
+                logger.debug(f"Current Chat History (from agent's memory before invoke): {memory.chat_memory.messages}")
 
                 try:
                     response = await agent_executor.ainvoke(
@@ -414,15 +427,15 @@ if __name__ == "__main__":
                         return_intermediate_steps=False
                     )
 
-                    print("\n--- Agent Response ---")
-                    print(f"Final Answer: {response.get('output')}")
+                    logger.info("\n--- Agent Response ---")
+                    logger.info(f"Final Answer: {response.get('output')}")
 
                     # DEBUGGING: Print the chat history after invocation to see if it was updated
-                    print(f"Current Chat History (from agent's memory after invoke): {memory.chat_memory.messages}")
+                    logger.debug(f"Current Chat History (from agent's memory after invoke): {memory.chat_memory.messages}")
 
                 except Exception as e:
-                    print(f"\nAn error occurred during agent invocation: {e}")
+                    logger.exception(f"\nAn error occurred during agent invocation: {e}")
         else:
-            print("Agent initialization failed. Cannot run test.")
+            logger.error("Agent initialization failed. Cannot run test.")
 
     asyncio.run(test_agent())
