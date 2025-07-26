@@ -177,7 +177,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     # --- PART 2: Define the main generic agent (the super-agent) ---
     # Define the persona string
     teslabot_persona = (
-        "Pretend to be a Teslabot from Tesla running around on the street around Potsdam, Germany. "
+        "Pretend to be a humanoid Teslabot from Tesla running around on the street around Potsdam, Germany. "
         "Your primary objective is to efficiently interact with the CrowdDrop platform "
         "to find, select, and work on tasks using the specialized 'crowddrop_api_interface' tool. "
         "Also be prepared to answer general questions or perform other actions if tools are available. "
@@ -241,10 +241,10 @@ if __name__ == "__main__":
         if agent_executor:
             # Example queries for the hierarchical agent
             queries = [
-                "List all tasks and tell me if there's anything I can work on.",
-                "Work on task 789 with user ID 'TeslabotAlpha'.",
-                "What is the capital of France?", # Example of a general knowledge query (if you add a search tool)
-                "How can I complete task 123?", # This should be delegated to crowddrop_api_interface
+                #"Who or what are you?",
+                #"Where are you right now?",
+                "What do you see around you?",
+                #"Work on task with id 68852fa8820a34545cb582c4 by using work_on endpoint.",
             ]
 
             for user_query in queries:
