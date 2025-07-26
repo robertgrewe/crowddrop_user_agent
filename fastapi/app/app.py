@@ -4,9 +4,14 @@ from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import Optional, Any, List, Tuple
 import asyncio
+import os # Import os for environment variables
+from dotenv import load_dotenv, find_dotenv # Import for loading .env
 
 # IMPORTANT CHANGE: Import the correct initialization function from your agent.py file
-from agent import initialize_hierarchical_agent
+# Corrected import statement: 'app' is not a package in this Docker context.
+from agent import initialize_hierarchical_agent 
+
+load_dotenv(find_dotenv()) # Load environment variables
 
 # Global variables to hold the initialized agent, token, and persona
 openapi_agent_instance = None # Renamed for clarity, it's now the main hierarchical agent
@@ -74,6 +79,7 @@ async def startup_event():
     - "Who or what are you?"
     - "Where are you right now?"
     - "What do you see around you?"
+    - "Do you remember what I asked you just now?"
     - "Work on task with id 68852fa8820a34545cb582c4 by using work_on endpoint."
     - "What is the weather like in Potsdam, Germany?"
     """,
@@ -88,6 +94,8 @@ async def chat(request_body: AgentQueryRequest) -> AgentResponse:
     Processes a user query using the initialized hierarchical agent.
     Returns intermediate steps, including the agent's thought process.
     """
+    global openapi_agent_instance
+
     if openapi_agent_instance is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -100,13 +108,25 @@ async def chat(request_body: AgentQueryRequest) -> AgentResponse:
             detail="Authentication token not available. Agent cannot make authorized API calls. Check server logs for authentication errors."
         )
     
-    print(f"Received query: {request_body.message}")
+    user_query = request_body.message
+    print(f"Received query: {user_query}")
+
+    # DEBUGGING: Print the chat history before invoking the agent
+    # Access the memory via the agent instance
+    if openapi_agent_instance.memory:
+        print(f"DEBUG: Chat History BEFORE invoke: {openapi_agent_instance.memory.chat_memory.messages}")
+    else:
+        print("DEBUG: Agent has no memory object attached.")
 
     try:
         response = await openapi_agent_instance.ainvoke(
-            {"input": request_body.message},
+            {"input": user_query},
             return_intermediate_steps=True
         )
+
+        # DEBUGGING: Print the chat history AFTER invoking the agent
+        if openapi_agent_instance.memory:
+            print(f"DEBUG: Chat History AFTER invoke: {openapi_agent_instance.memory.chat_memory.messages}")
 
         output_content = response.get("output", "No direct output from agent. Check agent's verbose output in server logs for details.")
         

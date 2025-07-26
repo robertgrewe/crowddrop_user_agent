@@ -6,3 +6,5 @@ requests
 langchain_community
 langchain_core
 langchain_google_genai
+psycopg[binary]
+sqlalchemy

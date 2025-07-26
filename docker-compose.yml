@@ -16,22 +16,52 @@ services:
     # No custom entrypoint or command needed here.
     # The image's default entrypoint will start the ollama server.
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres_db
+    restart: always
+    networks:
+      - proxynet
+    environment:
+      POSTGRES_DB: agent_memory
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password # IMPORTANT: Change this for production!
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persist database data
+    ports:
+      - "5432:5432" # Optional: For connecting with a local client
+    healthcheck: # Added healthcheck to ensure postgres is ready before pgAdmin
+      test: ["CMD-SHELL", "pg_isready -U user -d agent_memory"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   fastapi:
     image: "fastapi:latest"
     build:
-        context: ./fastapi
-        dockerfile: ./docker/Dockerfile
+      context: ./fastapi
+      dockerfile: ./docker/Dockerfile
     restart: always
     container_name: fastapi
     networks:
       - proxynet
     ports:
-        - 8003:8003
+      - 8003:8003
     expose:
-        - 8003
+      - 8003
+    environment:
+      # CORRECTED LINE: Only the value, without "DATABASE_URL=" inside
+      DATABASE_URL: "host=postgres_db port=5432 dbname=agent_memory user=user password=password"
+      OLLAMA_HOST: http://ollama:11434 # Ensure FastAPI can reach Ollama within Docker network
+    depends_on:
+      ollama:
+        condition: service_started
+      postgres:
+        condition: service_healthy # Wait for postgres to be healthy
 
 volumes:
   ollama_data:
+  postgres_data: # Declare the named volume for PostgreSQL
 
 networks:
   proxynet:
