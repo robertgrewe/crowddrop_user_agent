@@ -5,6 +5,7 @@ from typing import Any
 from langchain.tools import Tool
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_community.chat_message_histories import PostgresChatMessageHistory # Needed for clear_agent_memory and retrieve_chat_history
+from crowddrop_agent import get_crowddrop_api_tool
 
 # Get the logger for this module
 logger = logging.getLogger(__name__)
@@ -129,20 +130,7 @@ def get_all_agent_tools(crowddrop_openapi_agent_executor_instance: Any, get_post
             This tool will delete the entire chat history for that session, making the agent forget past interactions.
             """
         ),
-        Tool(
-            name="crowddrop_api_interface",
-            func=crowddrop_openapi_agent_executor_instance.invoke,
-            description=(
-                "A powerful tool for interacting with the CrowdDrop API. "
-                "Use this tool for all tasks related to CrowdDrop, such as listing tasks, "
-                "working on tasks, completing tasks, querying task details (including coordinates), "
-                "or **updating the humanoid robot's own location**. "
-                "Pass your query directly to this tool, for example: "
-                "'crowddrop_api_interface(\"list all tasks near me\")', "
-                "'crowddrop_api_interface(\"query details for task 123\")', or "
-                "'crowddrop_api_interface(\"update my location to latitude 52.123 and longitude 13.456\")'."
-                "This tool understands natural language queries related to CrowdDrop API operations."
-            ),
-        ),
+        # crowddrop_api_interface tool
+        get_crowddrop_api_tool(crowddrop_openapi_agent_executor_instance),
     ]
     return tools

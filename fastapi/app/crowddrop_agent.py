@@ -209,13 +209,14 @@ def get_crowddrop_api_tool(crowddrop_openapi_agent_executor_instance: Any) -> To
         func=crowddrop_openapi_agent_executor_instance.invoke,
         description=(
             "A powerful tool for interacting with the CrowdDrop API. "
-            "Use this tool for all tasks related to CrowdDrop, such as listing tasks, "
-            "working on tasks, completing tasks, querying task details (including coordinates), "
+            "**Crucially, use this tool to list all available tasks.** " # Stronger emphasis
+            "It can also be used for other tasks related to CrowdDrop, such as "
+            "working on tasks, completing tasks, querying specific task details (including coordinates), "
             "or **updating the humanoid robot's own location**. "
-            "Pass your query directly to this tool, for example: "
-            "'crowddrop_api_interface(\"list all tasks near me\")', "
-            "'crowddrop_api_interface(\"query details for task 123\")', or "
-            "'crowddrop_api_interface(\"update my location to latitude 52.123 and longitude 13.456\")'."
+            "Here are direct examples for common operations:\n"
+            "- To list all tasks: `crowddrop_api_interface(\"list all tasks\")` or `crowddrop_api_interface(\"show me available tasks\")`\n" # More direct examples
+            "- To query task details: `crowddrop_api_interface(\"query details for task 123\")`\n"
+            "- To update location: `crowddrop_api_interface(\"update my location to latitude 52.123 and longitude 13.456\")`\n"
             "This tool understands natural language queries related to CrowdDrop API operations."
         ),
     )
