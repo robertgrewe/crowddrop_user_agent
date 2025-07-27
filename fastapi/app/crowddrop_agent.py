@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8003")
 # Derived default for API_AUTH_URL, ensuring it uses the (potentially defaulted) API_BASE_URL
 API_AUTH_URL = os.getenv("API_AUTH_URL", f"{API_BASE_URL.rstrip('/')}/auth/login")
+API_OPENAPI_SPEC_URL = os.getenv("API_OPENAPI_SPEC_URL", f"{API_BASE_URL.rstrip('/')}/openapi.json")
 CROWDDROP_USERNAME = os.getenv("CROWDDROP_USERNAME", "testuser") # Added default for testing
 CROWDDROP_PASSWORD = os.getenv("CROWDDROP_PASSWORD", "testpassword") # Added default for testing
 MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "gemini") # Added default for testing
@@ -47,7 +48,7 @@ else:
     logger.error("API_BASE_URL is not set. Please ensure it's configured in your .env file or environment.")
 
 # Ensure API_OPENAPI_SPEC_URL is derived from the corrected API_BASE_URL
-API_OPENAPI_SPEC_URL = API_BASE_URL.rstrip('/') + "/openapi.json"
+#API_OPENAPI_SPEC_URL = API_BASE_URL.rstrip('/') + "/openapi.json"
 
 
 # DEBUGGING: Print the API_BASE_URL and API_OPENAPI_SPEC_URL immediately after they are loaded
@@ -112,20 +113,11 @@ async def initialize_crowddrop_sub_agent() -> Tuple[Any, Optional[str], Any]:
         response = requests.get(openapi_spec_url)
         response.raise_for_status()
         raw_openai_api_spec = response.json()
-
-        # AGGRESSIVE CORRECTION: Convert to string, replace typo, convert back to JSON
-        spec_string = json.dumps(raw_openai_api_spec)
-        corrected_spec_string = spec_string.replace("dev.crowddot.aidobotics.ai", "dev.crowddrop.aidobotics.ai")
-        raw_openai_api_spec = json.loads(corrected_spec_string)
-        logger.info("Performed aggressive typo correction on OpenAPI spec string.")
-
-        # Ensure the 'servers' list is explicitly set to the correct API_BASE_URL
-        raw_openai_api_spec["servers"] = [{"url": API_BASE_URL.rstrip('/') + "/app"}]
+        raw_openai_api_spec["servers"] = [{"url": API_OPENAPI_SPEC_URL}]
 
         # NEW DEBUG PRINT: Print the raw_openai_api_spec after all modifications
         logger.debug(f"DEBUG: Raw OpenAPI Spec AFTER all modifications (first 500 chars): {str(raw_openai_api_spec)[:500]}...")
         logger.debug(f"DEBUG: Raw OpenAPI Spec Servers AFTER all modifications: {raw_openai_api_spec.get('servers')}")
-
 
         logger.info(f"Modified OpenAPI Spec Servers: {raw_openai_api_spec.get('servers')}")
         openai_api_spec = reduce_openapi_spec(raw_openai_api_spec)
