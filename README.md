@@ -1,5 +1,5 @@
 # crowddrop_user_agent
-This repo contains code pretending to be a user based on an agentic approach.
+This repo contains code for an AI Agent pretending to be a humanoid robot agent logged in as a user based on CrowdDrop.
 
 # Docker
 
@@ -21,8 +21,22 @@ docker rmi <image_id>			# remove
 # Ollama Docker Image
 https://hub.docker.com/r/ollama/ollama
 
+## Open Web UI
+
+To connect the AI agent to OpenWebUi use the following details:
+
+```
+http://host.docker.internal:8003/v1
+```
+
+To talk to ollama model use:
+
+```
+http://host.docker.internal:11434
+```
+
 ## Models
-Download models by running:
+Download Ollama models by running:
 
 ```docker exec -it ollama ollama run llama3``` # llama3:latest model on Ollama does not have built-in support for tool calling (also known as function calling)
 
