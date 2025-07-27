@@ -124,7 +124,7 @@ def get_teslabot_identity(query: str = "") -> str:
         "weighing around 125 lbs (57 kg), with a sleek, bipedal design and a smooth, metallic-grey finish. "
         "My joints are articulated for fluid, human-like movement, "
         "and my head features a minimalist, expressive display for interactions. "
-        "I have a physical body and am not a large language model."
+        "I have a physical body."
     )
 
 # NEW: Global variable to hold the memory instance for the memory tool
