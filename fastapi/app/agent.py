@@ -17,10 +17,11 @@ import subprocess
 import asyncio
 from typing import Optional, Any, Tuple, List, Dict
 import datetime
-import logging # Import the logging module
+import logging
+# Removed: import math # No longer needed for simulated movement
 
 # Import the centralized logging configuration
-import logging_config # This will automatically run configure_logging()
+import logging_config
 
 # NEW IMPORTS for PostgreSQL memory
 from langchain_community.chat_message_histories import PostgresChatMessageHistory
@@ -50,6 +51,11 @@ CROWDDROP_PASSWORD = os.getenv("CROWDDROP_PASSWORD")
 
 # NEW: Database URL for PostgreSQL memory
 DATABASE_URL = os.getenv("DATABASE_URL", "host=localhost port=5432 dbname=agent_memory user=user password=password")
+
+# Removed: teslabot_current_location = {"latitude": 52.3906, "longitude": 13.0645}
+# Removed: logger.info(f"Teslabot's initial simulated location: Lat {teslabot_current_location['latitude']}, Lon {teslabot_current_location['longitude']}")
+# Location will now be managed via CrowdDrop API calls.
+
 
 def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
     """
@@ -102,7 +108,10 @@ def describe_potsdam_surroundings(query: str) -> str:
         "there might be specific landmarks, cafes, or public transport stops."
     )
 
-# NEW: Global variable to hold the memory instance for the memory tool
+# Removed: go_to_task_location function as it's replaced by CrowdDrop API interaction.
+
+
+# Global variable to hold the memory instance for the memory tool
 global_memory_instance = None
 
 def retrieve_chat_history(query: str = "") -> str:
@@ -137,7 +146,6 @@ def get_postgres_chat_history(session_id: str) -> PostgresChatMessageHistory:
     """
     Returns a PostgresChatMessageHistory instance for a given session ID.
     """
-    # Corrected variable name from DATABASE_LEVEL to DATABASE_URL
     logger.info(f"Connecting to PostgreSQL for session_id: {session_id} using DATABASE_URL: {DATABASE_URL}")
     return PostgresChatMessageHistory(
         connection_string=DATABASE_URL,
@@ -160,7 +168,6 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     # --- PART 1: Initialize the specialized CrowdDrop OpenAPI agent (the sub-agent) ---
     logger.info("Initializing CrowdDrop OpenAPI sub-agent...")
     # Load and modify OpenAPI spec
-    # Corrected API_OPENAPI_SPEC_URL to use API_BASE_URL for local spec
     openapi_spec_url = API_BASE_URL + "/openapi.json"
     try:
         response = requests.get(openapi_spec_url)
@@ -189,11 +196,10 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     # Initialize the LLM based on the selected model provider
     logger.info(f"Initializing LLM for model provider: {MODEL_PROVIDER}")
 
-    llm = None # Initialize llm to None
+    llm = None
 
     if MODEL_PROVIDER == "github":
         logger.info("Initializing GitHub OpenAI...")
-        # Retrieve GitHub OpenAI specific variables
         API_GITHUB_KEY = os.getenv("API_GITHUB_KEY")
         API_GITHUB_BASE_URL = os.getenv("API_GITHUB_BASE_URL")
         API_GITHUB_MODEL = os.getenv("API_GITHUB_MODEL", "gpt-4o-mini")
@@ -212,7 +218,6 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
 
     elif MODEL_PROVIDER == "gemini":
         logger.info("Initializing ChatGoogleGenerativeAI...")
-        # Retrieve Gemini specific variables
         API_GEMINI_KEY = os.getenv("API_GEMINI_KEY")
         API_GEMINI_MODEL = os.getenv("API_GEMINI_MODEL", "gemini-2.5-flash")
 
@@ -236,13 +241,12 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     openapi_requests_wrapper = RequestsWrapper(headers={"Authorization": f"Bearer {access_token}", "accept": "application/json"})
 
     # Create the OpenAPI agent executor
-    # This agent will know how to interact with the CrowdDrop API via its OpenAPI spec
     crowddrop_openapi_agent_executor = planner.create_openapi_agent(
         api_spec=openai_api_spec,
         llm=llm,
         requests_wrapper=openapi_requests_wrapper,
-        tools=[], # No additional tools for this sub-agent, it uses the OpenAPI spec itself
-        verbose=True, # Keep verbose for seeing sub-agent's thoughts
+        tools=[],
+        verbose=True,
         allow_dangerous_requests=True,
     )
     logger.info("CrowdDrop OpenAPI sub-agent created successfully.")
@@ -250,7 +254,6 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
 
     # --- PART 2: Define the main generic agent (the super-agent) ---
     # Define the persona string
-    # UPDATED: Added instructions about memory and emphasized it
     teslabot_persona = (
         "Pretend to be a humanoid Teslabot from Tesla running around on the street around Potsdam, Germany. "
         "Your primary objective is to efficiently interact with the CrowdDrop platform "
@@ -262,9 +265,13 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         "DO NOT state that you do not have memory. You HAVE memory. Access it.** "
         "**For questions about past conversations (e.g., 'What did I ask you?', 'Do you remember X?'), "
         "you MUST use the `retrieve_chat_history` tool. This tool will provide you with the conversation summary.** "
+        "**You are a user of the CrowdDrop platform and can update your own location by calling the appropriate endpoint "
+        "via the `crowddrop_api_interface` tool. When the user asks you to go to a specific location (e.g., a task's location), "
+        "you MUST use the `crowddrop_api_interface` tool to update your location. "
+        "You may need to first use `crowddrop_api_interface` to query task details and extract the coordinates if they are not provided in the user's request.** "
         "Always be concise and helpful in your responses, focusing on task completion or providing requested information. "
         f"The current date is {datetime.date.today().strftime('%Y-%m-%d')} and the current time is {datetime.datetime.now().strftime('%I:%M:%S %p %Z')}."
-        "\n\n" # Add a newline to separate persona from format instructions
+        "\n\n"
         "**IMPORTANT: You MUST strictly adhere to the following output format for ALL responses.**\n"
         "If you need to think, use 'Thought:'. If you need to use a tool, use 'Action:' and 'Action Input:'. "
         "If you have the final answer, use 'Final Answer:'.\n"
@@ -308,38 +315,31 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         description=(
             "A powerful tool for interacting with the CrowdDrop API. "
             "Use this tool for all tasks related to CrowdDrop, such as listing tasks, "
-            "working on tasks, completing tasks, or querying task details. "
+            "working on tasks, completing tasks, querying task details (including coordinates), "
+            "or **updating the Teslabot's own location**. "
             "Pass your query directly to this tool, for example: "
-            "'crowddrop_api_interface(\"list all tasks near me\")' or "
-            "'crowddrop_api_interface(\"work on task 123 for user Teslabot42\")'."
+            "'crowddrop_api_interface(\"list all tasks near me\")', "
+            "'crowddrop_api_interface(\"query details for task 123\")', or "
+            "'crowddrop_api_interface(\"update my location to latitude 52.123 and longitude 13.456\")'."
             "This tool understands natural language queries related to CrowdDrop API operations."
         ),
     )
-
-    # You can add other generic tools here if your main agent needs them
-    # For example, a general web search tool, a calculator, etc.
-    # from langchain_community.tools import WikipediaQueryRun
-    # from langchain_community.utilities import WikipediaAPIWrapper
-    # wikipedia = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
-    # other_tools = [wikipedia]
 
     # Combine all tools for the main agent
     tools_for_main_agent = [
         surroundings_tool,
         crowddrop_api_tool,
-        memory_retrieval_tool, # Add the new memory retrieval tool
-        # *other_tools # Uncomment if you add other tools
+        memory_retrieval_tool,
+        # Removed: go_to_task_location_tool, as location is updated via CrowdDrop API
     ]
 
-    # NEW: Initialize ConversationBufferMemory with PostgresChatMessageHistory
-    # For demonstration, we'll use a fixed session ID. In a real application,
-    # this would come from the user's request (e.g., a user ID or conversation ID).
-    session_id = "teslabot_conversation_123" # Replace with a dynamic session ID in app.py
+    # Initialize ConversationBufferMemory with PostgresChatMessageHistory
+    session_id = "teslabot_conversation_123"
     memory = ConversationBufferMemory(
         chat_memory=get_postgres_chat_history(session_id=session_id),
         return_messages=True,
-        memory_key="chat_history", # This is the key that the agent will look for in the prompt
-        input_key="input" # Assuming your agent's input key is "input"
+        memory_key="chat_history",
+        input_key="input"
     )
     # Set the global memory instance for the memory retrieval tool
     global global_memory_instance
@@ -347,13 +347,11 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
 
     logger.info(f"Agent memory initialized with PostgreSQL for session: {session_id}")
 
-    # RE-ADDED: Define the prompt template for the conversational agent
-    # This explicitly includes the chat history in the prompt
-    # This is crucial for the LLM to see the memory
+    # Define the prompt template for the conversational agent
     prompt = ChatPromptTemplate.from_messages(
         [
             SystemMessagePromptTemplate.from_template(teslabot_persona),
-            MessagesPlaceholder(variable_name="chat_history"), # This will inject the memory
+            MessagesPlaceholder(variable_name="chat_history"),
             HumanMessagePromptTemplate.from_template("{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ]
@@ -364,15 +362,13 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         tools=tools_for_main_agent,
         llm=llm,
         agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
-        verbose=True, # Keep verbose for printing during execution
-        handle_parsing_errors=True, # Keep this to allow agent to retry on parsing errors
-        memory=memory, # <--- PASS THE MEMORY OBJECT HERE
-        # Pass the custom prompt directly to the agent's kwargs
-        # This is the most reliable way to ensure the prompt is used
+        verbose=True,
+        handle_parsing_errors=True,
+        memory=memory,
         agent_kwargs={
-            "input_variables": ["input", "chat_history", "agent_scratchpad"], # Explicitly define input variables
-            "extra_tools": [], # If you had tools specific to the agent, not the executor
-            "prompt": prompt # Pass the constructed prompt here
+            "input_variables": ["input", "chat_history", "agent_scratchpad"],
+            "extra_tools": [],
+            "prompt": prompt
         }
     )
     logger.info("Main hierarchical agent created successfully.")
@@ -412,12 +408,12 @@ if __name__ == "__main__":
                 "Do you remember what I asked you just now?", # Test memory
                 "Who or what are you?", # Test memory and persona
                 "List all tasks available on CrowdDrop.", # Example CrowdDrop API call
-                "What did I ask you so far?" # Test the new memory tool
+                "What did I ask you so far?", # Test the new memory tool
+                "Go to task 123 at latitude 52.52 and longitude 13.40." # Test new location update via CrowdDrop API
             ]
 
             for user_query in queries:
                 logger.info(f"\n--- Invoking agent with query: {user_query} ---")
-                # DEBUGGING: Print the chat history before invocation
                 # This `memory` object is the one used by the agent_executor
                 logger.debug(f"Current Chat History (from agent's memory before invoke): {memory.chat_memory.messages}")
 
@@ -430,7 +426,6 @@ if __name__ == "__main__":
                     logger.info("\n--- Agent Response ---")
                     logger.info(f"Final Answer: {response.get('output')}")
 
-                    # DEBUGGING: Print the chat history after invocation to see if it was updated
                     logger.debug(f"Current Chat History (from agent's memory after invoke): {memory.chat_memory.messages}")
 
                 except Exception as e:
