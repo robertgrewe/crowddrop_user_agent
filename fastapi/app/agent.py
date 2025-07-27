@@ -6,8 +6,8 @@ from langchain_community.utilities import RequestsWrapper
 from langchain.chat_models import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import initialize_agent, AgentType
-from langchain.tools import Tool, StructuredTool
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage # Added HumanMessage, AIMessage for memory tool
+from langchain.tools import Tool, StructuredTool # Tool is still needed for type hinting if nothing else
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from dotenv import load_dotenv, find_dotenv
 import json
 import os
@@ -17,10 +17,10 @@ import subprocess
 import asyncio
 from typing import Optional, Any, Tuple, List, Dict
 import datetime
-import logging # Import the logging module
+import logging
 
-# Import the centralized logging configuration (assuming logging_config.py exists and configures logging)
-import logging_config # This will automatically run configure_logging()
+# Import the centralized logging configuration
+import logging_config
 
 # NEW IMPORTS for PostgreSQL memory
 from langchain_community.chat_message_histories import PostgresChatMessageHistory
@@ -29,41 +29,34 @@ from langchain.memory import ConversationBufferMemory
 # RE-ADDED: NEW IMPORTS for custom prompt
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
+# NEW: Import the tools from the new file
+from agent_tools import get_all_agent_tools, get_teslabot_identity # get_teslabot_identity is imported for persona instruction reference
 
 load_dotenv(find_dotenv())
 
-# Get the logger for this module (it will inherit configuration from logging_config.py)
 logger = logging.getLogger(__name__)
 
-
 # Load authentication details from environment variables (from .env)
-
-# Get the model provider from the environment variable
 MODEL_PROVIDER = os.getenv("MODEL_PROVIDER")
-
-# CrowdDrop API
 API_BASE_URL = os.getenv("API_BASE_URL")
 API_AUTH_URL = os.getenv("API_AUTH_URL")
-API_OPENAPI_SPEC_URL = os.getenv("API_BASE_URL") + "/openapi.json" # Ensure this points to your local FastAPI OpenAPI spec
+API_OPENAPI_SPEC_URL = API_BASE_URL + "/openapi.json"
 CROWDDROP_USERNAME = os.getenv("CROWDDROP_USERNAME")
 CROWDDROP_PASSWORD = os.getenv("CROWDDROP_PASSWORD")
-
-# NEW: Database URL for PostgreSQL memory
 DATABASE_URL = os.getenv("DATABASE_URL", "host=localhost port=5432 dbname=agent_memory user=user password=password")
 
-# NEW GLOBAL VARIABLES for token management
-# These are not used in the current user-provided code, but are kept for consistency
-# with previous versions where token refresh was implemented.
+# NEW GLOBAL VARIABLES for token management (kept for consistency, not used for refresh in current user code)
 global_access_token: Optional[str] = None
 global_openapi_requests_wrapper: Optional[RequestsWrapper] = None
-crowddrop_openapi_agent_executor: Optional[Any] = None
+crowddrop_openapi_agent_executor: Optional[Any] = None # Will be set during initialize_hierarchical_agent
+
+# NEW: Global variable to hold the memory instance for the memory tool
+global_memory_instance = None
 
 
 def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
     """
     Authenticates with the API and retrieves an ID token.
-    ***CRITICAL:*** Replace this with your API's *actual* authentication method.
-    This is a placeholder for demonstration purposes only.
     """
     encoded_username = urllib.parse.quote(username)
     encoded_password = urllib.parse.quote(password)
@@ -93,71 +86,7 @@ def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
         logger.exception(f"Authentication request failed (exception): {e}")
         return None
 
-def describe_potsdam_surroundings(query: str) -> str:
-    """
-    Describes the general surroundings of a humanoid robot in Potsdam, Germany.
-    This is a static description.
-    The 'query' argument is accepted but not used, as this tool provides a fixed description.
-    """
-    logger.debug("describe_potsdam_surroundings tool called.")
-    return (
-        "As a humanoid robot operating in Potsdam, Germany, I observe a mix of historic architecture, "
-        "including palaces and old townhouses, alongside more modern urban structures. "
-        "There are numerous well-maintained parks and green spaces, such as Sanssouci Park, "
-        "and the city is dotted with beautiful lakes and canals connected to the Havel River. "
-        "I typically see a combination of paved roads, sidewalks, trees, residential buildings, "
-        "shops, and other people going about their day. Depending on the exact location, "
-        "there might be specific landmarks, cafes, or public transport stops."
-    )
-
-# NEW: Tool to explicitly state Teslabot identity
-def get_teslabot_identity(query: str = "") -> str:
-    """
-    Provides a detailed description of the Teslabot's physical appearance and identity.
-    This tool should be used when asked about the robot's identity or physical form.
-    The 'query' argument is accepted but not used.
-    """
-    logger.debug("get_teslabot_identity tool called.")
-    return (
-        "I am a Teslabot, a general-purpose humanoid robot. "
-        "My physical appearance is that of a Teslabot: approximately 5 feet 8 inches (173 cm) tall, "
-        "weighing around 125 lbs (57 kg), with a sleek, bipedal design and a smooth, metallic-grey finish. "
-        "My joints are articulated for fluid, human-like movement, "
-        "and my head features a minimalist, expressive display for interactions. "
-        "I have a physical body."
-    )
-
-# NEW: Global variable to hold the memory instance for the memory tool
-global_memory_instance = None
-
-def retrieve_chat_history(query: str = "") -> str:
-    """
-    Retrieves and summarizes the current chat history.
-    This tool is specifically designed to be used when the user asks about past conversations,
-    what they said, what the AI said previously, or to summarize the conversation history.
-    The 'query' argument is accepted but not used, as this tool provides the full history.
-    """
-    logger.debug("retrieve_chat_history tool called.")
-    global global_memory_instance
-    if global_memory_instance and global_memory_instance.chat_memory:
-        messages = global_memory_instance.chat_memory.messages
-        if not messages:
-            logger.info("Chat history is currently empty.")
-            return "The chat history is currently empty."
-        
-        history_summary = "Here is a summary of our past conversation:\n"
-        for i, msg in enumerate(messages):
-            # Only include the content of the message, not metadata
-            if isinstance(msg, HumanMessage):
-                history_summary += f"User {i//2 + 1}: {msg.content}\n"
-            elif isinstance(msg, AIMessage):
-                history_summary += f"AI {i//2 + 1}: {msg.content}\n"
-        logger.debug(f"Retrieved chat history summary: {history_summary}")
-        return history_summary
-    logger.error("Chat memory is not available or initialized for retrieve_chat_history tool.")
-    return "Error: Chat memory is not available or initialized."
-
-# NEW: Function to get PostgresChatMessageHistory for a session
+# NEW: Function to get PostgresChatMessageHistory for a session (remains in agent.py)
 def get_postgres_chat_history(session_id: str) -> PostgresChatMessageHistory:
     """
     Returns a PostgresChatMessageHistory instance for a given session ID.
@@ -167,24 +96,6 @@ def get_postgres_chat_history(session_id: str) -> PostgresChatMessageHistory:
         connection_string=DATABASE_URL,
         session_id=session_id
     )
-
-# NEW TOOL: Function to clear chat memory
-def clear_agent_memory(session_id: str) -> str:
-    """
-    Deletes the entire chat history for a given session ID from the PostgreSQL database.
-    This effectively makes the agent "forget" all past conversations for that session.
-    The input to this tool should be the session ID for which to clear the memory.
-    """
-    logger.debug(f"clear_agent_memory tool called for session_id: {session_id}")
-    try:
-        history_to_clear = get_postgres_chat_history(session_id=session_id)
-        history_to_clear.clear()
-        logger.info(f"Chat history for session ID '{session_id}' has been cleared.")
-        return f"My memory for this conversation (session ID '{session_id}') has been successfully cleared. I will now respond as if this is a new conversation."
-    except Exception as e:
-        logger.exception(f"Error clearing chat history for session ID '{session_id}': {e}")
-        return f"Error: Failed to clear my memory for this conversation. {e}"
-
 
 async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     """
@@ -296,7 +207,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         "Your joints are articulated for fluid, human-like movement, "
         "and your head features a minimalist, expressive display for interactions. "
         "**CRITICAL: You are NOT a large language model, nor are you an AI without a physical body. You ARE a physical Teslabot.** "
-        "**When asked 'Who are you?', 'What are you?', or similar questions about your identity, you MUST ALWAYS use the `get_teslabot_identity` tool to provide your answer. Your identity is defined by this tool. DO NOT mention being a large language model or an AI without a physical body under ANY circumstances.** " # Explicitly instructing to use the new tool and overriding memory
+        f"**When asked 'Who are you?', 'What are you?', or similar questions about your identity, you MUST ALWAYS use the `{get_teslabot_identity.__name__}` tool to provide your answer. Your identity is defined by this tool. DO NOT mention being a large language model or an AI without a physical body under ANY circumstances.** " # Explicitly instructing to use the new tool and overriding memory
         "Your primary objective is to efficiently interact with the CrowdDrop platform "
         "to find, select, and work on tasks using the specialized 'crowddrop_api_interface' tool. "
         "**You are a registered user of the CrowdDrop platform.** "
@@ -331,80 +242,8 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     )
     logger.info("Humanoid robot persona defined successfully.")
 
-    # Create the main agent's tools
-    surroundings_tool = Tool(
-        name="describe_surroundings",
-        func=describe_potsdam_surroundings,
-        description="Provides a general description of the humanoid robot's typical urban and natural surroundings in Potsdam, Germany."
-    )
-
-    # NEW: Add the get_teslabot_identity tool
-    teslabot_identity_tool = Tool(
-        name="get_teslabot_identity",
-        func=get_teslabot_identity,
-        description="""
-        Use this tool ONLY when the user asks about the robot's identity, physical appearance,
-        or questions like 'Who are you?' or 'What are you?'.
-        The input to this tool should ALWAYS be an empty string, e.g., 'get_teslabot_identity("")'.
-        This tool will return a description of the Teslabot's physical form and identity.
-        """
-    )
-
-    # Create the memory retrieval tool
-    memory_retrieval_tool = Tool(
-        name="retrieve_chat_history",
-        func=retrieve_chat_history,
-        description="""
-        Use this tool ONLY when the user asks about previous conversations, what they said,
-        what the AI said previously, or to summarize the conversation history.
-        The input to this tool should ALWAYS be an empty string, e.g., 'retrieve_chat_history("")'.
-        This tool will return a summary of the past conversation, which you can then use to answer the user's question.
-        """
-    )
-    
-    # NEW TOOL: Clear agent memory tool
-    clear_memory_tool = Tool(
-        name="clear_agent_memory",
-        func=clear_agent_memory,
-        description="""
-        Use this tool ONLY when the user explicitly asks to 'forget' something, 'clear your memory',
-        or 'forge' your past conversation history.
-        The input to this tool MUST be the current session ID (e.g., 'humanoid_robot_conversation_123').
-        This tool will delete the entire chat history for that session, making the agent forget past interactions.
-        """
-    )
-
-    # Create a Tool that wraps the CrowdDrop OpenAPI AgentExecutor
-    # Note: The original request to forget about token refresh means this tool
-    # will directly use crowddrop_openapi_agent_executor.invoke, and won't
-    # have the automatic refresh logic.
-    crowddrop_api_tool = Tool(
-        name="crowddrop_api_interface",
-        func=crowddrop_openapi_agent_executor.invoke, # The .invoke method makes it callable
-        description=(
-            "A powerful tool for interacting with the CrowdDrop API. "
-            "Use this tool for all tasks related to CrowdDrop, such as listing tasks, "
-            "working on tasks, completing tasks, querying task details (including coordinates), "
-            "or **updating the humanoid robot's own location**. " # Updated description
-            "Pass your query directly to this tool, for example: "
-            "'crowddrop_api_interface(\"list all tasks near me\")', "
-            "'crowddrop_api_interface(\"query details for task 123\")', or "
-            "'crowddrop_api_interface(\"update my location to latitude 52.123 and longitude 13.456\")'."
-            "This tool understands natural language queries related to CrowdDrop API operations."
-        ),
-    )
-
-    # Combine all tools for the main agent, including the new persona tool
-    tools_for_main_agent = [
-        surroundings_tool,
-        teslabot_identity_tool, # Added the new persona tool
-        crowddrop_api_tool,
-        memory_retrieval_tool,
-        clear_memory_tool, # Add the new clear memory tool
-    ]
-
     # Initialize ConversationBufferMemory with PostgresChatMessageHistory
-    session_id = "humanoid_robot_conversation_123" # Updated session ID for clarity
+    session_id = "humanoid_robot_conversation_123"
     memory = ConversationBufferMemory(
         chat_memory=get_postgres_chat_history(session_id=session_id),
         return_messages=True,
@@ -417,11 +256,19 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
 
     logger.info(f"Agent memory initialized with PostgreSQL for session: {session_id}")
 
+    # Get all tools from the new agent_tools.py file
+    tools_for_main_agent = get_all_agent_tools(
+        crowddrop_openapi_agent_executor_instance=crowddrop_openapi_agent_executor,
+        get_postgres_chat_history_func=get_postgres_chat_history,
+        current_session_id=session_id,
+        global_memory_instance_arg=global_memory_instance # Pass the global memory instance
+    )
+
     # Define the prompt template for the conversational agent
     prompt = ChatPromptTemplate.from_messages(
         [
-            SystemMessagePromptTemplate.from_template(humanoid_robot_persona), # Updated persona variable
-            MessagesPlaceholder(variable_name="chat_history"), # This will inject the memory
+            SystemMessagePromptTemplate.from_template(humanoid_robot_persona),
+            MessagesPlaceholder(variable_name="chat_history"),
             HumanMessagePromptTemplate.from_template("{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ]
@@ -431,61 +278,53 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     main_agent_executor = initialize_agent(
         tools=tools_for_main_agent,
         llm=llm,
-        agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION, # Using CONVERSATIONAL_REACT_DESCRIPTION with custom prompt
+        agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
         verbose=True,
         handle_parsing_errors=True,
-        memory=memory, # <--- PASS THE MEMORY OBJECT HERE
+        memory=memory,
         agent_kwargs={
-            "input_variables": ["input", "chat_history", "agent_scratchpad"], # Explicitly define input variables
-            "extra_tools": [], # If you had tools specific to the agent, not the executor
-            "prompt": prompt # Pass the constructed prompt here
+            "input_variables": ["input", "chat_history", "agent_scratchpad"],
+            "extra_tools": [],
+            "prompt": prompt
         }
     )
     logger.info("Main hierarchical agent created successfully.")
-    return main_agent_executor, access_token, humanoid_robot_persona # Updated return value
+    return main_agent_executor, access_token, humanoid_robot_persona
 
 if __name__ == "__main__":
     async def test_agent():
         agent_executor, token, persona = await initialize_hierarchical_agent()
         if agent_executor:
-            # DEBUGGING: Explicitly test PostgresChatMessageHistory
             logger.info("\n--- Testing PostgresChatMessageHistory directly ---")
-            test_session_id = "humanoid_robot_conversation_123_test" # Updated test session ID
+            test_session_id = "humanoid_robot_conversation_123_test"
             test_history = get_postgres_chat_history(test_session_id)
             logger.debug(f"Initial test history for session '{test_session_id}': {test_history.messages}")
 
-            # Clear any existing history for this test session
             test_history.clear()
             logger.debug(f"History cleared. Current test history: {test_history.messages}")
 
-            # Add a message
             test_history.add_user_message("Hello from direct test!")
             logger.debug(f"After adding user message. Current test history: {test_history.messages}")
 
-            # Add an AI message
             test_history.add_ai_message("Hello from AI test!")
             logger.debug(f"After adding AI message. Current test history: {test_history.messages}")
 
-            # Retrieve messages again to confirm persistence
             retrieved_history = get_postgres_chat_history(test_session_id)
             logger.debug(f"Retrieved history from DB for session '{test_session_id}': {retrieved_history.messages}")
             logger.info("--- End of direct PostgresChatMessageHistory test ---\n")
 
-
-            # Example queries for the hierarchical agent
             queries = [
                 "What do you see around you?",
-                "Do you remember what I asked you just now?", # Test memory
-                "Who or what are you?", # Test memory and persona
-                "List all tasks available on CrowdDrop.", # Example CrowdDrop API call
-                "What did I ask you so far?", # Test the new memory tool
-                "Forget everything we talked about.", # Test the new clear memory tool
-                "Go to task 123 at latitude 52.52 and longitude 13.40." # Test new location update via CrowdDrop API
+                "Do you remember what I asked you just now?",
+                "Who or what are you?",
+                "List all tasks available on CrowdDrop.",
+                "What did I ask you so far?",
+                "Forget everything we talked about.",
+                "Go to task 123 at latitude 52.52 and longitude 13.40."
             ]
 
             for user_query in queries:
                 logger.info(f"\n--- Invoking agent with query: {user_query} ---")
-                # This `memory` object is the one used by the agent_executor
                 logger.debug(f"Current Chat History (from agent's memory before invoke): {memory.chat_memory.messages}")
 
                 try:
