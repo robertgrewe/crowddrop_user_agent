@@ -1,19 +1,9 @@
 # agent.py
 
-from langchain_community.agent_toolkits.openapi import planner
-from langchain_community.agent_toolkits.openapi.spec import reduce_openapi_spec
-from langchain_community.utilities import RequestsWrapper
-from langchain.chat_models import ChatOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import initialize_agent, AgentType
-from langchain.tools import Tool, StructuredTool # Tool is still needed for type hinting if nothing else
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from dotenv import load_dotenv, find_dotenv
-import json
 import os
-import requests
-import urllib.parse
-import subprocess
 import asyncio
 from typing import Optional, Any, Tuple, List, Dict
 import datetime
@@ -29,64 +19,31 @@ from langchain.memory import ConversationBufferMemory
 # RE-ADDED: NEW IMPORTS for custom prompt
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
-# NEW: Import the tools from the new file
-from agent_tools import get_all_agent_tools, get_teslabot_identity # get_teslabot_identity is imported for persona instruction reference
+# NEW: Import the tools from the new agent_tools.py file
+from agent_tools import get_all_agent_tools, get_teslabot_identity
+
+# NEW: Import the sub-agent initialization from crowddrop_agent.py
+from crowddrop_agent import initialize_crowddrop_sub_agent
 
 load_dotenv(find_dotenv())
 
 logger = logging.getLogger(__name__)
 
-# Load authentication details from environment variables (from .env)
+# Load environment variables (these are now primarily consumed by crowddrop_agent.py and agent_tools.py)
+# Keeping them loaded here for consistency and if any other part of agent.py needs them directly.
 MODEL_PROVIDER = os.getenv("MODEL_PROVIDER")
 API_BASE_URL = os.getenv("API_BASE_URL")
 API_AUTH_URL = os.getenv("API_AUTH_URL")
-API_OPENAPI_SPEC_URL = API_BASE_URL + "/openapi.json"
 CROWDDROP_USERNAME = os.getenv("CROWDDROP_USERNAME")
+# CORRECTED LINE: Fixed typo from CROWDCROP_PASSWORD to CROWDDROP_PASSWORD
 CROWDDROP_PASSWORD = os.getenv("CROWDDROP_PASSWORD")
 DATABASE_URL = os.getenv("DATABASE_URL", "host=localhost port=5432 dbname=agent_memory user=user password=password")
-
-# NEW GLOBAL VARIABLES for token management (kept for consistency, not used for refresh in current user code)
-global_access_token: Optional[str] = None
-global_openapi_requests_wrapper: Optional[RequestsWrapper] = None
-crowddrop_openapi_agent_executor: Optional[Any] = None # Will be set during initialize_hierarchical_agent
 
 # NEW: Global variable to hold the memory instance for the memory tool
 global_memory_instance = None
 
 
-def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
-    """
-    Authenticates with the API and retrieves an ID token.
-    """
-    encoded_username = urllib.parse.quote(username)
-    encoded_password = urllib.parse.quote(password)
-    full_url = f"{API_AUTH_URL}?username={encoded_username}&password={encoded_password}"
-
-    curl_command = [
-        "curl",
-        "-X", "POST",
-        full_url,
-        "-H", "accept: application/json",
-        "-d", "",
-    ]
-
-    try:
-        process = subprocess.Popen(curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate()
-
-        if process.returncode != 0:
-            logger.error(f"Authentication request failed (curl): {stderr.decode()}")
-            return None
-
-        response_data = json.loads(stdout.decode())
-        logger.debug(f"Authentication response data: {response_data}")
-        return response_data.get("id_token")
-
-    except Exception as e:
-        logger.exception(f"Authentication request failed (exception): {e}")
-        return None
-
-# NEW: Function to get PostgresChatMessageHistory for a session (remains in agent.py)
+# Function to get PostgresChatMessageHistory for a session (remains in agent.py as it's directly related to this agent's memory setup)
 def get_postgres_chat_history(session_id: str) -> PostgresChatMessageHistory:
     """
     Returns a PostgresChatMessageHistory instance for a given session ID.
@@ -102,101 +59,19 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     Initializes and returns the LangChain hierarchical agent, the access token,
     and the humanoid robot persona string.
     """
-    global crowddrop_openapi_agent_executor # Declare this global for the sub-agent executor
-
     logger.info("Initializing hierarchical agent within agent.py...")
 
-    # Authenticate and get token
-    access_token = authenticate_and_get_token(CROWDDROP_USERNAME, CROWDDROP_PASSWORD)
-    if access_token is None:
-        logger.error("Authentication failed. Cannot initialize agent without token.")
-        return None, None, ""
-
     # --- PART 1: Initialize the specialized CrowdDrop OpenAPI agent (the sub-agent) ---
-    logger.info("Initializing CrowdDrop OpenAPI sub-agent...")
-    # Load and modify OpenAPI spec
-    openapi_spec_url = API_BASE_URL + "/openapi.json"
-    try:
-        response = requests.get(openapi_spec_url)
-        response.raise_for_status()
-        raw_openai_api_spec = response.json()
+    # This call now encapsulates all the CrowdDrop-specific initialization
+    # It returns the sub-agent executor, the access token, AND THE LLM INSTANCE
+    crowddrop_openapi_agent_executor, access_token, llm = await initialize_crowddrop_sub_agent()
+    if crowddrop_openapi_agent_executor is None:
+        logger.error("Failed to initialize CrowdDrop sub-agent. Cannot proceed with main agent.")
+        return None, None, ""
+    logger.info("CrowdDrop OpenAPI sub-agent successfully initialized and retrieved.")
 
-        if "servers" not in raw_openai_api_spec or not isinstance(raw_openai_api_spec["servers"], list):
-            raw_openai_api_spec["servers"] = []
-
-        found_full_url = False
-        for i, server in enumerate(raw_openai_api_spec["servers"]):
-            if server.get("url") == "/app":
-                raw_openai_api_spec["servers"][i]["url"] = API_BASE_URL + "/app"
-                found_full_url = True
-                break
-        if not found_full_url:
-            raw_openai_api_spec["servers"].insert(0, {"url": API_BASE_URL + "/app"})
-
-        logger.info(f"Modified OpenAPI Spec Servers: {raw_openai_api_spec.get('servers')}")
-        openai_api_spec = reduce_openapi_spec(raw_openai_api_spec)
-        logger.info("Successfully loaded and modified OpenAPI spec from URL.")
-    except requests.exceptions.RequestException as e:
-        logger.exception(f"Error fetching OpenAPI spec from URL: {e}")
-        return None, None, "" # Return None if spec loading fails
-
-    # Initialize the LLM based on the selected model provider
-    logger.info(f"Initializing LLM for model provider: {MODEL_PROVIDER}")
-
-    llm = None
-
-    if MODEL_PROVIDER == "github":
-        logger.info("Initializing GitHub OpenAI...")
-        API_GITHUB_KEY = os.getenv("API_GITHUB_KEY")
-        API_GITHUB_BASE_URL = os.getenv("API_GITHUB_BASE_URL")
-        API_GITHUB_MODEL = os.getenv("API_GITHUB_MODEL", "gpt-4o-mini")
-
-        if not API_GITHUB_KEY or not API_GITHUB_MODEL:
-            logger.error("GitHub OpenAI API key or model name not set in .env for OpenAI provider.")
-            raise ValueError("GitHub OpenAI API key or model name not set in .env for OpenAI provider.")
-
-        llm = ChatOpenAI(
-            model_name=API_GITHUB_MODEL,
-            temperature=0.0,
-            api_key=API_GITHUB_KEY,
-            base_url=API_GITHUB_BASE_URL,
-        )
-        logger.info(f"GitHub OpenAI initialized with model: {API_GITHUB_MODEL}")
-
-    elif MODEL_PROVIDER == "gemini":
-        logger.info("Initializing ChatGoogleGenerativeAI...")
-        API_GEMINI_KEY = os.getenv("API_GEMINI_KEY")
-        API_GEMINI_MODEL = os.getenv("API_GEMINI_MODEL", "gemini-1.5-flash")
-
-        if not API_GEMINI_KEY or not API_GEMINI_MODEL:
-            logger.error("Gemini API key or model name not set in .env for Gemini provider.")
-            raise ValueError("Gemini API key or model name not set in .env for Gemini provider.")
-
-        llm = ChatGoogleGenerativeAI(
-            model=API_GEMINI_MODEL,
-            temperature=0.0,
-            google_api_key=API_GEMINI_KEY,
-        )
-        logger.info(f"ChatGoogleGenerativeAI initialized with model: {API_GEMINI_MODEL}")
-
-    else:
-        logger.critical(f"Invalid MODEL_PROVIDER specified in .env: {MODEL_PROVIDER}. Must be 'github' or 'gemini'.")
-        raise ValueError(f"Invalid MODEL_PROVIDER specified in .env: {MODEL_PROVIDER}. Must be 'github' or 'gemini'.")
-    logger.info("LLM initialized successfully.")
-
-    # Configure RequestsWrapper with the Authorization header for the OpenAPI agent
-    openapi_requests_wrapper = RequestsWrapper(headers={"Authorization": f"Bearer {access_token}", "accept": "application/json"})
-
-    # Create the OpenAPI agent executor
-    crowddrop_openapi_agent_executor = planner.create_openapi_agent(
-        api_spec=openai_api_spec,
-        llm=llm,
-        requests_wrapper=openapi_requests_wrapper,
-        tools=[],
-        verbose=True,
-        allow_dangerous_requests=True,
-    )
-    logger.info("CrowdDrop OpenAPI sub-agent created successfully.")
+    # The LLM instance is now directly returned from initialize_crowddrop_sub_agent
+    # So, the line `llm = crowddrop_openapi_agent_executor.llm` is no longer needed here.
 
 
     # --- PART 2: Define the main generic agent (the super-agent) ---
@@ -257,11 +132,12 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     logger.info(f"Agent memory initialized with PostgreSQL for session: {session_id}")
 
     # Get all tools from the new agent_tools.py file
+    # Pass the crowddrop_openapi_agent_executor to the tool creation function
     tools_for_main_agent = get_all_agent_tools(
         crowddrop_openapi_agent_executor_instance=crowddrop_openapi_agent_executor,
         get_postgres_chat_history_func=get_postgres_chat_history,
         current_session_id=session_id,
-        global_memory_instance_arg=global_memory_instance # Pass the global memory instance
+        global_memory_instance_arg=global_memory_instance
     )
 
     # Define the prompt template for the conversational agent
@@ -277,7 +153,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     # Initialize the main generic agent
     main_agent_executor = initialize_agent(
         tools=tools_for_main_agent,
-        llm=llm,
+        llm=llm, # Use the LLM instance obtained from the sub-agent initialization
         agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
         verbose=True,
         handle_parsing_errors=True,
@@ -325,6 +201,7 @@ if __name__ == "__main__":
 
             for user_query in queries:
                 logger.info(f"\n--- Invoking agent with query: {user_query} ---")
+                # This `memory` object is the one used by the agent_executor
                 logger.debug(f"Current Chat History (from agent's memory before invoke): {memory.chat_memory.messages}")
 
                 try:
