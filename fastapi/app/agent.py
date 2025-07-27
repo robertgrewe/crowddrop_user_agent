@@ -7,7 +7,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import initialize_agent, AgentType
 from langchain.tools import Tool, StructuredTool
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage # Added HumanMessage, AIMessage for memory tool
 from dotenv import load_dotenv, find_dotenv
 import json
 import os
@@ -17,11 +17,10 @@ import subprocess
 import asyncio
 from typing import Optional, Any, Tuple, List, Dict
 import datetime
-import logging
-# Removed: import math # No longer needed for simulated movement
+import logging # Import the logging module
 
 # Import the centralized logging configuration
-import logging_config
+import logging_config # This will automatically run configure_logging()
 
 # NEW IMPORTS for PostgreSQL memory
 from langchain_community.chat_message_histories import PostgresChatMessageHistory
@@ -51,11 +50,6 @@ CROWDDROP_PASSWORD = os.getenv("CROWDDROP_PASSWORD")
 
 # NEW: Database URL for PostgreSQL memory
 DATABASE_URL = os.getenv("DATABASE_URL", "host=localhost port=5432 dbname=agent_memory user=user password=password")
-
-# Removed: teslabot_current_location = {"latitude": 52.3906, "longitude": 13.0645}
-# Removed: logger.info(f"Teslabot's initial simulated location: Lat {teslabot_current_location['latitude']}, Lon {teslabot_current_location['longitude']}")
-# Location will now be managed via CrowdDrop API calls.
-
 
 def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
     """
@@ -93,13 +87,13 @@ def authenticate_and_get_token(username: str, password: str) -> Optional[str]:
 
 def describe_potsdam_surroundings(query: str) -> str:
     """
-    Describes the general surroundings of a Teslabot in Potsdam, Germany.
+    Describes the general surroundings of a humanoid robot in Potsdam, Germany.
     This is a static description.
     The 'query' argument is accepted but not used, as this tool provides a fixed description.
     """
     logger.debug("describe_potsdam_surroundings tool called.")
     return (
-        "As a Teslabot operating in Potsdam, Germany, I observe a mix of historic architecture, "
+        "As a humanoid robot operating in Potsdam, Germany, I observe a mix of historic architecture, "
         "including palaces and old townhouses, alongside more modern urban structures. "
         "There are numerous well-maintained parks and green spaces, such as Sanssouci Park, "
         "and the city is dotted with beautiful lakes and canals connected to the Havel River. "
@@ -108,10 +102,7 @@ def describe_potsdam_surroundings(query: str) -> str:
         "there might be specific landmarks, cafes, or public transport stops."
     )
 
-# Removed: go_to_task_location function as it's replaced by CrowdDrop API interaction.
-
-
-# Global variable to hold the memory instance for the memory tool
+# NEW: Global variable to hold the memory instance for the memory tool
 global_memory_instance = None
 
 def retrieve_chat_history(query: str = "") -> str:
@@ -155,7 +146,7 @@ def get_postgres_chat_history(session_id: str) -> PostgresChatMessageHistory:
 async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     """
     Initializes and returns the LangChain hierarchical agent, the access token,
-    and the Teslabot persona string.
+    and the humanoid robot persona string.
     """
     logger.info("Initializing hierarchical agent within agent.py...")
 
@@ -219,7 +210,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     elif MODEL_PROVIDER == "gemini":
         logger.info("Initializing ChatGoogleGenerativeAI...")
         API_GEMINI_KEY = os.getenv("API_GEMINI_KEY")
-        API_GEMINI_MODEL = os.getenv("API_GEMINI_MODEL", "gemini-2.5-flash")
+        API_GEMINI_MODEL = os.getenv("API_GEMINI_MODEL", "gemini-1.5-flash") # Changed back to a stable model
 
         if not API_GEMINI_KEY or not API_GEMINI_MODEL:
             logger.error("Gemini API key or model name not set in .env for Gemini provider.")
@@ -253,9 +244,9 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
 
 
     # --- PART 2: Define the main generic agent (the super-agent) ---
-    # Define the persona string
-    teslabot_persona = (
-        "Pretend to be a humanoid Teslabot from Tesla running around on the street around Potsdam, Germany. "
+    # Define the persona string - Updated to be a generic humanoid robot
+    humanoid_robot_persona = (
+        "Pretend to be a general-purpose humanoid robot operating on the street around Potsdam, Germany. "
         "Your primary objective is to efficiently interact with the CrowdDrop platform "
         "to find, select, and work on tasks using the specialized 'crowddrop_api_interface' tool. "
         "Also be prepared to answer general questions or perform other actions if tools are available. "
@@ -285,15 +276,15 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         "Thought: I now know the final answer\n"
         "Final Answer: the final answer to the original input question"
     )
-    logger.info("Teslabot persona defined successfully.")
+    logger.info("Humanoid robot persona defined successfully.")
 
     # Create the main agent's tools
 
-    # Create the describe surroundings tool
+    # Create the describe surroundings tool - Updated description
     surroundings_tool = Tool(
         name="describe_surroundings",
         func=describe_potsdam_surroundings,
-        description="Provides a general description of the Teslabot's typical urban and natural surroundings in Potsdam, Germany."
+        description="Provides a general description of the humanoid robot's typical urban and natural surroundings in Potsdam, Germany."
     )
 
     # Create the memory retrieval tool
@@ -316,7 +307,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
             "A powerful tool for interacting with the CrowdDrop API. "
             "Use this tool for all tasks related to CrowdDrop, such as listing tasks, "
             "working on tasks, completing tasks, querying task details (including coordinates), "
-            "or **updating the Teslabot's own location**. "
+            "or **updating the humanoid robot's own location**. " # Updated description
             "Pass your query directly to this tool, for example: "
             "'crowddrop_api_interface(\"list all tasks near me\")', "
             "'crowddrop_api_interface(\"query details for task 123\")', or "
@@ -330,11 +321,10 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
         surroundings_tool,
         crowddrop_api_tool,
         memory_retrieval_tool,
-        # Removed: go_to_task_location_tool, as location is updated via CrowdDrop API
     ]
 
     # Initialize ConversationBufferMemory with PostgresChatMessageHistory
-    session_id = "teslabot_conversation_123"
+    session_id = "humanoid_robot_conversation_123" # Updated session ID for clarity
     memory = ConversationBufferMemory(
         chat_memory=get_postgres_chat_history(session_id=session_id),
         return_messages=True,
@@ -350,7 +340,7 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     # Define the prompt template for the conversational agent
     prompt = ChatPromptTemplate.from_messages(
         [
-            SystemMessagePromptTemplate.from_template(teslabot_persona),
+            SystemMessagePromptTemplate.from_template(humanoid_robot_persona), # Updated persona variable
             MessagesPlaceholder(variable_name="chat_history"),
             HumanMessagePromptTemplate.from_template("{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -361,18 +351,18 @@ async def initialize_hierarchical_agent() -> Tuple[Any, Optional[str], str]:
     main_agent_executor = initialize_agent(
         tools=tools_for_main_agent,
         llm=llm,
-        agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
+        agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION, # Using CONVERSATIONAL_REACT_DESCRIPTION with custom prompt
         verbose=True,
         handle_parsing_errors=True,
         memory=memory,
         agent_kwargs={
             "input_variables": ["input", "chat_history", "agent_scratchpad"],
             "extra_tools": [],
-            "prompt": prompt
+            "prompt": prompt # Pass the constructed prompt here
         }
     )
     logger.info("Main hierarchical agent created successfully.")
-    return main_agent_executor, access_token, teslabot_persona
+    return main_agent_executor, access_token, humanoid_robot_persona # Updated return value
 
 if __name__ == "__main__":
     async def test_agent():
@@ -380,7 +370,7 @@ if __name__ == "__main__":
         if agent_executor:
             # DEBUGGING: Explicitly test PostgresChatMessageHistory
             logger.info("\n--- Testing PostgresChatMessageHistory directly ---")
-            test_session_id = "teslabot_conversation_123_test"
+            test_session_id = "humanoid_robot_conversation_123_test" # Updated test session ID
             test_history = get_postgres_chat_history(test_session_id)
             logger.debug(f"Initial test history for session '{test_session_id}': {test_history.messages}")
 

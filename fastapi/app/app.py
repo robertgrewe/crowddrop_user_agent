@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Global variables to hold the initialized agent, token, and persona
 openapi_agent_instance = None
 global_access_token = None
-global_teslabot_persona = ""
+global_humanoid_robot_persona = "" # Renamed from global_teslabot_persona
 
 # Pydantic models for YOUR AGENT's API (existing)
 class AgentQueryRequest(BaseModel):
@@ -51,7 +51,8 @@ class OpenAIChatMessage(BaseModel):
     content: str
 
 class OpenAIChatCompletionRequest(BaseModel):
-    model: str = Field(..., example="teslabot-agent", description="The model name (e.g., 'teslabot-agent')")
+    # Updated model name example and description
+    model: str = Field(..., example="humanoid-robot-agent", description="The model name (e.g., 'humanoid-robot-agent')")
     messages: List[OpenAIChatMessage] = Field(..., description="List of chat messages in OpenAI format.")
     temperature: Optional[float] = 0.0
     max_tokens: Optional[int] = 2048
@@ -71,7 +72,8 @@ class OpenAIChatCompletionResponse(BaseModel):
     id: str = Field(..., example="chatcmpl-12345")
     object: str = "chat.completion"
     created: int = Field(..., example=1677652288)
-    model: str = Field(..., example="teslabot-agent")
+    # Updated model name
+    model: str = Field(..., example="humanoid-robot-agent")
     choices: List[OpenAIChatCompletionChoice]
     usage: OpenAIUsage = OpenAIUsage()
 
@@ -91,8 +93,8 @@ class OpenAIModelsResponse(BaseModel):
 
 # FastAPI app instance
 app = FastAPI(
-    title="Humanoid robot emulation API",
-    description="An API to interact with a hierarchical LangChain agent emulating a humanoid robot capable of using the CrowdDrop API and other general tools.",
+    title="Humanoid Robot Agent API", # Updated title
+    description="An API to interact with a hierarchical LangChain agent emulating a humanoid robot capable of using the CrowdDrop API and other general tools.", # Updated description
     version="1.0.0",
 )
 
@@ -104,14 +106,14 @@ async def startup_event():
     """
     global openapi_agent_instance
     global global_access_token
-    global global_teslabot_persona
+    global global_humanoid_robot_persona # Renamed
 
     logger.info("FastAPI app starting up: Initializing hierarchical agent...")
     agent, token, persona = await initialize_hierarchical_agent()
     if agent:
         openapi_agent_instance = agent
         global_access_token = token
-        global_teslabot_persona = persona
+        global_humanoid_robot_persona = persona # Renamed
         logger.info("Hierarchical agent successfully loaded into FastAPI app with persona.")
     else:
         logger.error("Failed to initialize agent during startup.")
@@ -315,8 +317,9 @@ async def openai_chat_completions(request_body: OpenAIChatCompletionRequest) -> 
 async def list_models() -> OpenAIModelsResponse:
     logger.info("Received request for /v1/models endpoint.")
     # Define the single model our agent exposes
-    teslabot_model = OpenAIModel(id="teslabot-agent")
-    return OpenAIModelsResponse(data=[teslabot_model])
+    # Updated model ID
+    humanoid_robot_model = OpenAIModel(id="humanoid-robot-agent") 
+    return OpenAIModelsResponse(data=[humanoid_robot_model])
 
 @app.get(
     "/health",
